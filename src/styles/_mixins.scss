@@ -1,0 +1,36 @@
+
+@mixin center($x) {
+  transform: translate($x);
+  -webkit-transform: translate($x);
+  -moz-transform: translate($x);
+  -ms-transform: translate($x);
+  -o-transform: translate($x);
+}
+
+@mixin tra($x) {
+  transition: $x;
+  -webkit-transition: $x;
+  -moz-transition: $x;
+  -ms-transition: $x;
+  -o-transition: $x;
+}
+
+@mixin flex($justify, $align) {
+  display: flex;
+  align-items: $align;
+  justify-content: $justify;
+}
+
+@mixin rad($x) {
+  border-radius: $x;
+  -webkit-border-radius: $x;
+  -moz-border-radius: $x;
+  -ms-border-radius: $x;
+  -o-border-radius: $x;
+}
+
+@mixin grid($x) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill , minmax($x , 1fr));
+  gap: 50px;
+}

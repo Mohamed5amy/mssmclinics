@@ -1,0 +1,71 @@
+@use "../../styles/colors" as *;
+@import "../../styles/mixins";
+
+.Sidebar {
+  position: sticky;
+  top: 0;
+  right: 0;
+  width: auto;
+  height: 100vh;
+  max-width: 280px;
+  width: fit-content;
+  z-index: 1;
+  z-index: 1000;
+
+  // Icons
+  svg { 
+    width: 24px;
+    height: 24px;
+  }
+  // item
+  .item {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+    @include tra(1s);
+    color: $icons;
+    position: relative;
+
+    &::before {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 50%;
+      @include center((0 , -50%));
+      width: 2px;
+      height: 0;
+      background-color: $secondary;
+      @include tra(.5s);
+    }
+    
+    &:hover , &.active {
+      background-color: $main;
+      color: $border;
+      &::before {
+        height: 100%;
+      }
+    }
+  }
+}
+
+
+@media (max-width: 900px) {
+  .Sidebar {
+    position: absolute;
+    top: 96px;
+    right: -280px;
+    height: calc(100vh - 96px);
+
+    &.active {
+      right: 0;
+    }
+  }
+}
+
+@media (max-width: 600px) {
+  .Sidebar {
+    position: absolute;
+    top: 77.6px;
+    left: -280px;
+    height: calc(100vh - 77.6px);
+  }
+}
