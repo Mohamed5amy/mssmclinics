@@ -25,7 +25,7 @@ import ChangePass from "./pages/Clinics/ChangePass";
 
 import Patient_List from "./pages/Patients/List";
 import Patient_Profile from "./pages/Patients/Profile";
-import Patient_Add from "./pages/Patients/add";
+import Patient_Add from "./pages/Patients/Add";
 import Patients_Edit from "./pages/Patients/Edit";
 
 import Reservations_List from "./pages/Reservations/List";
