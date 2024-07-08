@@ -8,6 +8,7 @@ import axios from "axios";
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PaidIcon from '@mui/icons-material/Paid';
+import { Link } from "react-router-dom";
 
 
 const Insights = () => {
@@ -84,7 +85,7 @@ const Insights = () => {
               <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> الاطباء </Typography>
               <Typography fontWeight={500} color={"text"} fontSize={32} > {nums?.doctors_count}  </Typography>
             </Stack>
-            <IconButton sx={{color : "#32C652"}}> <SupervisorAccountIcon sx={{fontSize : 50}} /> </IconButton>
+            <Link to={"/doctors-list"}><IconButton sx={{color : "#11CAF2"}}> <SupervisorAccountIcon sx={{fontSize : 50}} /> </IconButton></Link>
           </Stack>
         </Grid>
         <Grid item xs={12} sm={4} md={4}>
@@ -93,7 +94,7 @@ const Insights = () => {
               <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> المرضي </Typography>
               <Typography fontWeight={500} color={"text"} fontSize={32} > {nums?.patients_count}  </Typography>
             </Stack>
-            <IconButton sx={{color : "#594BFA"}}> <MedicalServicesIcon sx={{fontSize : 50}} /> </IconButton>
+            <Link to={"/patients-list"} ><IconButton sx={{color : "#594BFA"}}> <MedicalServicesIcon sx={{fontSize : 50}} /> </IconButton></Link>
           </Stack>
         </Grid>
         <Grid item xs={12} sm={4} md={4}>
@@ -102,7 +103,7 @@ const Insights = () => {
               <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> الكشوفات </Typography>
               <Typography fontWeight={500} color={"text"} fontSize={32} > {nums?.reservations_count} </Typography>
             </Stack>
-            <IconButton sx={{color : "#FABD13"}} > <SummarizeIcon sx={{fontSize : 50}} /> </IconButton>
+            <Link to={"/reservations-list"} ><IconButton sx={{color : "#FABD13"}} > <SummarizeIcon sx={{fontSize : 50}} /> </IconButton></Link>
           </Stack>
         </Grid>
         <Grid item xs={12} sm={4} md={4}>
@@ -120,7 +121,7 @@ const Insights = () => {
               <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> دخل الدكاترة </Typography>
               <Typography fontWeight={500} color={"text"} fontSize={32} > {cumD}  </Typography>
             </Stack>
-            <IconButton sx={{color : "#594BFA"}}> <AttachMoneyIcon sx={{fontSize : 50}} /> </IconButton>
+            <IconButton sx={{color : "#515DAA"}}> <AttachMoneyIcon sx={{fontSize : 50}} /> </IconButton>
           </Stack>
         </Grid>
         <Grid item xs={12} sm={4} md={4}>
