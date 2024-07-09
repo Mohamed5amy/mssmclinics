@@ -72,17 +72,21 @@ const Reports_Profile = () => {
             value: client?.doctorSpecalite,
         },
         {
-            key: "من :",
+            key: "الوقت :",
             value: client?.time,
         },
         {
-            key: "العيادة :",
-            value: client?.clinicBranch,
+            key: "التاريخ :",
+            value: client?.CustomDate,
         },
-        {
-            key: "مسؤول العيادة :",
-            value: client?.clinicName,
-        },
+        // {
+        //     key: "العيادة :",
+        //     value: client?.clinicBranch,
+        // },
+        // {
+        //     key: "مسؤول العيادة :",
+        //     value: client?.clinicName,
+        // },
     ];
 
     const handleRole = (role) => {
@@ -102,10 +106,6 @@ const Reports_Profile = () => {
         {
             key: "نسبة الطبيب :",
             value: client?.price  * client?.doctor?.prectange / 100 + " جنيه" ,
-        },
-        {
-            key: "التاريخ :",
-            value: client?.CustomDate,
         },
         {
             key: "الحالة :",

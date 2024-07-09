@@ -1,46 +1,11 @@
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import { IconButton, Stack, Typography } from '@mui/material';
 import "./Navbar.scss"
-import { useEffect, useState } from 'react';
 
 
 const Navbar = ({setActiveMobile , activeMobile , setExpand , setActive}) => {
-
-  const [search, setSearch] = useState("")
-
-  let sidebar = localStorage.getItem("sidebar");
-
-  const enableDarkMode = () => {
-    localStorage.setItem("sidebar", "enabled");
-    setActiveMobile(true)
-    setExpand(true)
-    setActive(true)
-  };
-  
-  const disableDarkMode = () => {
-    localStorage.setItem("sidebar", "disabled");
-    setActiveMobile(false)
-    setExpand(false)
-    setActive(false)
-  };
-
-  useEffect(() => {
-    if (sidebar === "enabled") {
-      enableDarkMode();
-    }
-  } , [])
-
-  const handleToggle = () => {
-    sidebar = localStorage.getItem("sidebar"); // update sidebar when clicked
-    if (sidebar === "disabled") {
-      enableDarkMode();
-    } else {
-      disableDarkMode();
-    }
-  }
   
   const name = JSON.parse(localStorage.getItem("user")).name;
-  const role = localStorage.getItem("role");
   
   return (
     <div className='Navbar'>
@@ -49,7 +14,11 @@ const Navbar = ({setActiveMobile , activeMobile , setExpand , setActive}) => {
         {/* Toggle Sidebar */}
         <IconButton color='primary' 
         sx={{borderRadius : "8px"}}
-        onClick={() => handleToggle()} 
+        onClick={() => {
+          setActiveMobile(prev => !prev)
+          setExpand(prev => !prev)
+          setActive(prev => !prev)
+        }} 
         >
           <MenuOpenIcon sx={{
             transition : ".5s",

@@ -175,7 +175,7 @@ const Reports_List = () => {
         /> 
 
         <Stack direction={"row"} spacing={8} alignItems={"center"}>
-          { role === "clinic" && <Link to={"add"} > 
+          { role === 3 && <Link to={"add"} > 
             <Button startIcon={<AddCircleOutlineRoundedIcon />} variant="contained" sx={{ p : "16px 40px" , borderRadius : "8px" }}> اضافة حالة </Button> 
           </Link>}
           
@@ -290,7 +290,7 @@ const Reports_List = () => {
       </Typography>}
       <Table headers={headers} data={filteredData} loading={loading} body={body} edit={role === 3} profile={true} />
       {/* Number */}
-      <Typography fontWeight={500} color={"text.secondary"} > عدد الكشوفات : {filteredData?.length} </Typography>
+      <Typography fontWeight={500} color={"text.secondary"} mt={4}> عدد الكشوفات : {filteredData?.length} </Typography>
     </Container>
   )
 }

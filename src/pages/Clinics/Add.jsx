@@ -74,7 +74,7 @@ const Add = () => {
                             <Input
                                 required={true}
                                 type={"text"}
-                                label={"المسؤول"}
+                                label={"اسم العيادة"}
                                 register={register}
                                 registerName="name"
                                 error={
@@ -100,7 +100,7 @@ const Add = () => {
                             <Input
                                 required={true}
                                 type={"text"}
-                                label={"الفرع"}
+                                label={"العنوان"}
                                 register={register}
                                 registerName="branch"
                                 error={

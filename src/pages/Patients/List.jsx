@@ -20,8 +20,8 @@ import useRole from "../../hooks/Role/useRole";
 
 const List = () => {
 
-    const headers = ["اسم المريض" , "رقم الهاتف" , "العيادة" ]
-    const body = ["name" , "phone" , "clinicBranch" ]
+    const headers = ["اسم المريض" , "رقم الهاتف" , "العمر" , "عن طريق" ]
+    const body = ["name" , "phone" , "age" , "providerName"]
 
     const [loading, setLoading] = useState(false);
     const [admins, setAdmins] = useState([]);

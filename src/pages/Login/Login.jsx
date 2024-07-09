@@ -14,15 +14,15 @@ const Login = () => {
     // is Logged in ?
     const isAuthenticated = useIsAuthenticated()
     const navigate = useNavigate()
-  
-    useEffect(() => {
-      isAuthenticated() && navigate("/reservations-list")
-    } , [isAuthenticated , navigate])
-  
-    const { register, handleSubmit, formState: { errors } } = useForm();
 
     // IM ?
     const [myRole, setMyRole] = useState("3")
+  
+    useEffect(() => {
+      isAuthenticated() && navigate(myRole == 3 ? "/insights" : "/reservations-list" )
+    } , [isAuthenticated , navigate , myRole])
+  
+    const { register, handleSubmit, formState: { errors } } = useForm();
   
     // Signing in
     const [invalid, setInvalid] = useState("")
@@ -52,7 +52,7 @@ const Login = () => {
         localStorage.setItem("user" , JSON.stringify(res.data.data))
         localStorage.setItem("role" , res.data.data.role)
         localStorage.setItem("isSuper" , res.data.data.is_super)
-        navigate("/reservations-list")
+        navigate(myRole == 3 ? "/insights" : "/reservations-list" )
       })
       .catch(err => {
         setInvalid(err.response.data.message)
