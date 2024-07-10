@@ -85,7 +85,7 @@ const Edit = () => {
                             <Input
                                 required={true}
                                 type={"text"}
-                                label={"ألمسؤول"}
+                                label={"اسم العيادة"}
                                 register={register}
                                 registerName="name"
                                 defaultValue={data?.name}
@@ -113,7 +113,7 @@ const Edit = () => {
                             <Input
                                 required={true}
                                 type={"text"}
-                                label={"ألفرع"}
+                                label={"العنوان"}
                                 register={register}
                                 registerName="branch"
                                 defaultValue={data?.branch}

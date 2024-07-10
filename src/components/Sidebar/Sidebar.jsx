@@ -35,13 +35,13 @@ const Sidebar = ({ activeMobile, active, setActive, expand }) => {
             name: "الدكاترة",
             icon: <SupervisorAccountIcon />,
             to: "/doctors-list",
-            role: [1 ,2 , 3],
+            role: [1, 3],
         },
         {
             name: "المرضي",
             icon: <MedicalServicesIcon />,
             to: "/patients-list",
-            role: [1, 2 , 3],
+            role: [1 , 3],
         },
         {
             name: "العيادات",
@@ -53,7 +53,7 @@ const Sidebar = ({ activeMobile, active, setActive, expand }) => {
             name: "الكشوفات",
             icon: <SummarizeIcon />,
             to: "/reservations-list",
-            role: [1, 2 , 3 , 4],
+            role: [1 , 3 , 4],
         },
         {
             name: "الاعدادات",
@@ -66,13 +66,13 @@ const Sidebar = ({ activeMobile, active, setActive, expand }) => {
     const signOut = useSignOut();
     const navigate = useNavigate();
 
+    const role = useRole()
+
     // handle logOut
     const logOut = () => {
         signOut();
-        navigate("/");
+        role > 2 ? navigate("/") : navigate("/login-admin")
     };
-
-    const role = useRole()
     
     return (
         <div

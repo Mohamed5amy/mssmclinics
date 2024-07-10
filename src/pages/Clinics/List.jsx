@@ -19,12 +19,7 @@ import SaveAltIcon from "@mui/icons-material/SaveAlt";
 import useRole from "../../hooks/Role/useRole";
 
 const List = () => {
-    const headers = [
-        "المسؤول",
-        "رقم الجوال",
-        "الايميل",
-        "الفرع",
-    ];
+    const headers = ["اسم العيادة","رقم الجوال","الايميل","العنوان",];
     const body = ["name", "phone", "email", "branch"];
 
     const [loading, setLoading] = useState(false);
@@ -32,11 +27,11 @@ const List = () => {
 
     const [adminId, setadminId] = useState("")
 
-    // Get Agents
+    // Get clinics
     useEffect(() => {
         setLoading(true);
         axios
-            .get(import.meta.env.VITE_API + "list-clinic" , {
+            .get(import.meta.env.VITE_API + "list-clinic?" + `${adminId ? "adminId=" + adminId : ""}&` , {
                 headers: {
                     Authorization: "Bearer " + localStorage.getItem("token"),
                 },
@@ -51,7 +46,7 @@ const List = () => {
             .finally(() => {
                 setLoading(false);
             });
-    }, []);
+    }, [adminId]);
 
     // Search Admins
     const [search, setSearch] = useState("");
@@ -62,7 +57,7 @@ const List = () => {
             const newData =
                 clients &&
                 clients.filter((admin) =>
-                    admin.branch.toLowerCase().includes(search.toLowerCase())
+                    admin.name.toLowerCase().includes(search.toLowerCase())
                 );
             setFilteredData(newData);
         } else {
@@ -134,7 +129,7 @@ const List = () => {
             {/* Table */}
             <Table headers={headers} data={filteredData} loading={loading} body={body} edit={role === 2 && true} profile={true} />
             {/* Number */}
-            <Typography fontWeight={500} color={"text.secondary"} > عدد العيادات : {filteredData?.length} </Typography>
+            <Typography fontWeight={500} color={"text.secondary"} mt={4}> عدد العيادات : {filteredData?.length} </Typography>
         </Container>
     );
 };

@@ -64,7 +64,7 @@ const Profile = () => {
 
     const data = [
         {
-            key: "المسؤول :",
+            key: "اسم العيادة :",
             value: client?.name,
         },
         {
@@ -76,10 +76,13 @@ const Profile = () => {
             value: client?.email,
         },
         {
-            key: "الفرع :",
+            key: "العنوان :",
             value: client?.branch,
         },
-
+        {
+            key: "تاريخ الاضافة :",
+            value: client?.created_at?.slice(0, 10),
+        },
     ];
 
     return (
