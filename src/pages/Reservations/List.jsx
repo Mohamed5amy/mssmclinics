@@ -20,8 +20,8 @@ const Reports_List = () => {
 
   const role = useRole()
 
-  const headers = ["الدكتور" , "المريض" , "التخصص" , "التاريخ" , "الخدمة"]
-  const body = ["doctorName" , "name" , "doctorSpecalite" , "CustomDate" , "serviceName"]
+  const headers = ["الدكتور" , "المريض" , "التخصص" , "التاريخ" , "الخدمة" , "حالة الكشف"]
+  const body = ["doctorName" , "name" , "doctorSpecalite" , "CustomDate" , "serviceName" , "status"]
 
   const [loading, setLoading] = useState(false)
   const [clients, setClients] = useState([])
@@ -75,7 +75,8 @@ const Reports_List = () => {
   const [clinics, setClinics] = useState([]);
 
   useEffect(() => {
-      axios
+      if (role == 2 || role == 1) {
+        axios
           .get(import.meta.env.VITE_API + "list-clinic", {
               headers: {
                   Authorization: "Bearer " + localStorage.getItem("token"),
@@ -87,13 +88,14 @@ const Reports_List = () => {
           .catch((err) => {
               console.log(err.response.data);
           });
-  }, []);
+      }
+  }, [role]);
 
   // Get Cities
   const [doctors, setDoctors] = useState([]);
 
   useEffect(() => {
-      axios
+    (role == 3 || role == 2 || role == 1) && axios
           .get(import.meta.env.VITE_API + "list-doctors", {
               headers: {
                   Authorization: "Bearer " + localStorage.getItem("token"),
@@ -106,13 +108,12 @@ const Reports_List = () => {
           .catch((err) => {
               console.log(err.response.data);
           });
-  }, []);
+  }, [role]);
 
   // Get Clients
   const [patients, setPatients] = useState([]);
 
   useEffect(() => {
-      setLoading(true);
       axios
           .get(import.meta.env.VITE_API + "list-patients", {
               headers: {
@@ -138,10 +139,10 @@ const Reports_List = () => {
   useEffect(() => {
 
     setCum(0)
-    filteredData.map(item => setCum(prev => prev + item.price))
+    filteredData.map(item => item.status == "مكتمل" && setCum(prev => prev + item.price))
 
     setCumD(0)
-    filteredData.map(item => setCumD(prev => prev + (item.price * item.doctor?.prectange / 100 )))
+    filteredData.map(item => item.status == "مكتمل" && setCumD(prev => prev + (item.price * item.doctor?.prectange / 100 )))
     
   } , [filteredData])
 
@@ -151,16 +152,9 @@ const Reports_List = () => {
   return (
     <Container>
       {/* Search */}
-      <Stack    
-        direction={{xs : "column" , sm : "row"}}
-        alignItems={"center"}
-        justifyContent={"space-between"}
-        mb={8}
-        spacing={8}
-      >
+      <Stack direction={{xs : "column" , sm : "row"}} alignItems={"center"} justifyContent={"space-between"} mb={8} spacing={8} >
 
-        <TextField 
-          type="search"
+        <TextField type="search"
           sx={{ bgcolor : "primary.white" }}
           placeholder="بحث باسم المريض"
           InputProps={{
@@ -176,7 +170,7 @@ const Reports_List = () => {
 
         <Stack direction={"row"} spacing={8} alignItems={"center"}>
           { role === 3 && <Link to={"add"} > 
-            <Button startIcon={<AddCircleOutlineRoundedIcon />} variant="contained" sx={{ p : "16px 40px" , borderRadius : "8px" }}> اضافة حالة </Button> 
+            <Button startIcon={<AddCircleOutlineRoundedIcon />} variant="contained" sx={{ p : "16px 40px" , borderRadius : "8px" }}> اضافة كشف </Button> 
           </Link>}
           
           <CSVLink data={filteredData} filename="Agents" > <IconButton color="primary" > <SaveAltIcon /> </IconButton> </CSVLink>
@@ -184,12 +178,8 @@ const Reports_List = () => {
       </Stack>
       {/* Filter */}
       <Accordion sx={{ mb : 8 , boxShadow : "none" }} >
-        <AccordionSummary
-          expandIcon={<ExpandMoreIcon />}
-          aria-controls="panel1-content"
-          id="panel1-header"
-        >
-          الحسابات
+        <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="panel1-content" id="panel1-header" >
+          الحسابات ( يتم حساب الكشوفات المكتمله فقط )
         </AccordionSummary>
         <AccordionDetails>
           <Grid container spacing={12} >
@@ -233,7 +223,7 @@ const Reports_List = () => {
           الفلتره
         </AccordionSummary>
         <AccordionDetails>
-          <Grid container spacing={8} mb={4} >
+          <Grid container spacing={8}>
             <Grid item xs={12} sm={6}>
               <Typography mb={2} color={"text.secondary"} > من</Typography>
               <TextField type="date" value={startDate} onChange={e => {setStartDate(e.target.value) ; dateText && setDateText(false) }} fullWidth />
@@ -278,9 +268,6 @@ const Reports_List = () => {
               }
               </TextField>
             </Grid>
-          </Grid>
-          <Grid container spacing={4}>
-            
           </Grid>
         </AccordionDetails>
       </Accordion>

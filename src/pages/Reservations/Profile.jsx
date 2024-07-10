@@ -89,10 +89,11 @@ const Reports_Profile = () => {
         // },
     ];
 
-    const handleRole = (role) => {
-        if (role == 1) return "مكتمل"
-        if (role == 0) return "ملغي"
-    }
+    // const handleRole = (role) => {
+    //     if (role == 1) return "مكتمل"
+    //     if (role == 2) return "فى الانتظار"
+    //     if (role == 0) return "ملغي"
+    // }
 
     const data2 = [
         {
@@ -109,7 +110,7 @@ const Reports_Profile = () => {
         },
         {
             key: "الحالة :",
-            value: handleRole(client?.status),
+            value: client?.status,
         },
     ];
 

@@ -370,13 +370,16 @@ const Clients_Edit = () => {
                                         borderColor: "primary.border",
                                         bgcolor: "#eceff9",
                                     }}
-                                    defaultValue={+data?.status}
+                                    defaultValue={data?.status}
                                     onChange={() => setAyHaga4(true)}
                                 >
-                                    <MenuItem value={0}>
+                                    <MenuItem value={"ملغي"}>
                                         ملغي
                                     </MenuItem>
-                                    <MenuItem value={1}>
+                                    <MenuItem value={"فى الانتظار"}>
+                                        فى الانتظار
+                                    </MenuItem>
+                                    <MenuItem value={"مكتمل"}>
                                         مكتمل
                                     </MenuItem>
                                 </TextField>

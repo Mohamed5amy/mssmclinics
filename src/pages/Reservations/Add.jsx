@@ -134,6 +134,9 @@ const Reports_Add = () => {
                         <Grid item xs={12} sm={4}>
                              <Select label={"الخدمة"} register={register} error={errors?.service_id?.message || (error?.service_id && error?.service_id[0])} data={services} name={"name"} registerName={"service_id"} required={true} />
                         </Grid>
+                        <Grid item xs={12} sm={4}>
+                             <Select label={"حالة الكشف"} register={register} error={errors?.status?.message || (error?.status && error?.status[0])} data={[{name : "ملغي" , id : "ملغي" } , {name : "فى الانتظار" , id : "فى الانتظار"} , {name : "مكتمل" , id : "مكتمل"}]} name={"name"} registerName={"status"} required={true} />
+                        </Grid>
                     </Grid>
                 </Box>
                 {/* Submit */}

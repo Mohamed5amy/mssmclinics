@@ -59,8 +59,8 @@ function App() {
         direction: "rtl",
         palette: {
             primary: {
-                main: "#69a8a8",
-                secondary: "#fc93a3",
+                main: "#358efc",
+                secondary: "#28e3e1",
                 border: "#D9DFEC",
                 background: "#ECEFF9",
                 white: "#FBFCFE",

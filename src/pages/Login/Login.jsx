@@ -1,7 +1,7 @@
 // images
 import { useForm } from "react-hook-form";
 import Input from "../../components/Input/Input";
-import moneyImg from "../../images/logo.png"
+import moneyImg from "../../images/text.svg"
 
 import { Button, CircularProgress, Stack, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import { useEffect, useState } from "react";

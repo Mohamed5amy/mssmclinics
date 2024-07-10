@@ -5,8 +5,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import LogoutIcon from "@mui/icons-material/Logout";
 
 // images
-import textImg from "../../images/text.png";
-import iconImg from "../../images/logo.png";
+import textImg from "../../images/text.svg";
 import { useSignOut } from "react-auth-kit";
 import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -83,9 +82,8 @@ const Sidebar = ({ activeMobile, active, setActive, expand }) => {
         >
             <Stack pr={active ? 24 : 0} pt={15} bgcolor={"primary.white"} height={"100%"}>
                 {/* Image */}
-                <Stack mb={28} pl={active ? 20 : 15}>
-                    {!active && <img src={iconImg} alt="logo" width={50} />}
-                    {active && <img src={textImg} alt="logo" width={"100%"} />}
+                <Stack mb={28} pl={active ? 20 : 15} maxWidth={active ? "auto" : "100px"}>
+                    <img src={textImg} alt="logo" width={"100%"} />
                 </Stack>
                 {/* Items */}
                 <Stack spacing={8}>
