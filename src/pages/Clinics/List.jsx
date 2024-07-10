@@ -31,7 +31,7 @@ const List = () => {
     useEffect(() => {
         setLoading(true);
         axios
-            .get(import.meta.env.VITE_API + "list-clinic?" + `${adminId ? "adminId=" + adminId : ""}&` , {
+            .get(import.meta.env.VITE_API + "list-clinic?" + `${adminId && "admin_id=" + adminId + "&"}` , {
                 headers: {
                     Authorization: "Bearer " + localStorage.getItem("token"),
                 },
