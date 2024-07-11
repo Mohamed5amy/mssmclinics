@@ -406,7 +406,7 @@ const Clients_Edit = () => {
                             </Stack>
                         </Grid>
                     </Grid>}
-                    {role === "doctor" && <Stack mt={8}>
+                    {(role === 4 || role === 3) && <Stack mt={8}>
                         <Input
                             required={true}
                             type={"text"}
