@@ -80,7 +80,7 @@ const List = () => {
                 </Stack>
             </Stack>
             {/* Table */}
-            <Table headers={headers} data={filteredData} loading={loading} edit={true} profile={true} body={body} />
+            <Table headers={headers} data={filteredData} loading={loading} edit={role == 3 && true}  profile={true} body={body} />
             {/* Number */}
             <Typography fontWeight={500} color={"text.secondary"} mt={4}> عدد المرضي : {filteredData?.length} </Typography>
         </Container>

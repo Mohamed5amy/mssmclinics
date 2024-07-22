@@ -15,6 +15,9 @@ import axios from "axios";
 import Popup from "../../components/Popup/Popup";
 import useRole from "../../hooks/Role/useRole";
 
+
+
+
 const Profile = () => {
     
     const { id } = useParams();
@@ -131,6 +134,8 @@ const AdminData = ({ admin, setOpen }) => {
         },
     ];
 
+    const role = useRole()
+
     return (
         <Box
             bgcolor={"primary.white"}
@@ -154,12 +159,11 @@ const AdminData = ({ admin, setOpen }) => {
                     <Typography variant="body"> {admin?.email} </Typography>
                 </Stack>
                 {/* Icons */}
-                <Stack spacing={4} direction={"row"} alignItems={"center"}>
+                {role == 3 && <Stack spacing={4} direction={"row"} alignItems={"center"}>
                     <IconButton color="error" onClick={() => setOpen(true)}>
-                        {" "}
-                        <DeleteOutlineRoundedIcon />{" "}
+                        <DeleteOutlineRoundedIcon />
                     </IconButton>
-                </Stack>
+                </Stack>}
             </Stack>
             {/* Profile Data */}
             <Grid container spacing={{ xs: 8, md: 0 }}>

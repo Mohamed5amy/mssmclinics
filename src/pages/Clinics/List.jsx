@@ -96,7 +96,7 @@ const List = () => {
                 <Stack direction={{xs : "column" , sm : "row"}} spacing={4} >
                     <TextField type="search"
                         sx={{ bgcolor: "primary.white" }}
-                        placeholder="البحث باسم الفرع"
+                        placeholder="البحث باسم العيادة"
                         InputProps={{
                             startAdornment: (
                                 <InputAdornment position="start">

@@ -153,7 +153,7 @@ const Reports_Profile = () => {
                         </Typography>
                     </Stack>
                     {/* Delete */}
-                    {role !== "doctor" && (
+                    {role == 3 && (
                         <Stack
                             direction={"row"}
                             alignItems={"center"}

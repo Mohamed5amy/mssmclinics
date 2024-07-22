@@ -105,6 +105,8 @@ const AdminData = ({ admin, setOpen }) => {
         },
     ];
 
+    const role = useRole()
+
     return (
         <Box bgcolor={"primary.white"} p={"32px 16px"} borderRadius={"12px"} mt={8}>
             {/* Name && Icons */}
@@ -115,9 +117,9 @@ const AdminData = ({ admin, setOpen }) => {
                     <Typography variant="body"> {admin?.email} </Typography>
                 </Stack>
                 {/* Icons */}
-                <Stack spacing={4} direction={"row"} alignItems={"center"}>
+                {role == 3 && <Stack spacing={4} direction={"row"} alignItems={"center"}>
                     <IconButton color="error" onClick={() => setOpen(true)}><DeleteOutlineRoundedIcon /></IconButton>
-                </Stack>
+                </Stack>}
             </Stack>
             {/* Profile Data */}
             <Grid container>
