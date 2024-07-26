@@ -91,6 +91,8 @@ const Profile = () => {
 
 const AdminData = ({ admin, setOpen }) => {
 
+    const role = useRole()
+
     const data = [
         {
             key: "الاسم :",
@@ -117,8 +119,8 @@ const AdminData = ({ admin, setOpen }) => {
 
     const data2 = [
         {
-            key: "العيادة :",
-            value: admin?.clinicBranch,
+            key: role === 3 ? "اسم العيادة" : "العيادة :",
+            value: role === 3 ? admin?.clinicName : admin?.clinicBranch,
         },
         {
             key: "عدد الزيارات :",
@@ -133,8 +135,6 @@ const AdminData = ({ admin, setOpen }) => {
             value: admin?.providerName,
         },
     ];
-
-    const role = useRole()
 
     return (
         <Box
@@ -156,7 +156,7 @@ const AdminData = ({ admin, setOpen }) => {
                 {/* Name */}
                 <Stack spacing={4}>
                     <Typography variant="h3"> {admin?.name} </Typography>
-                    <Typography variant="body"> {admin?.email} </Typography>
+                    <Typography variant="body"> {admin?.phone} </Typography>
                 </Stack>
                 {/* Icons */}
                 {role == 3 && <Stack spacing={4} direction={"row"} alignItems={"center"}>
