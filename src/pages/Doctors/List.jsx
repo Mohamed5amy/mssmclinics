@@ -2,7 +2,6 @@ import {
     Button,
     IconButton,
     InputAdornment,
-    MenuItem,
     Stack,
     TextField,
     Typography,
@@ -52,7 +51,7 @@ const List = () => {
 
     const role = useRole()
 
-    const [adminId, setadminId] = useState("")
+    // const [adminId, setadminId] = useState("")
 
     return (
         <Container>
@@ -63,14 +62,14 @@ const List = () => {
 
                     <TextField type="search" sx={{ bgcolor: "primary.white" }} placeholder="البحث بالاسم" InputProps={{startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>)}} value={search} onChange={(e) => setSearch(e.target.value)}/>
 
-                    { (role === 1 || role === 2) && <TextField label={"العيادة"} select sx={{minWidth : "200px"}} value={adminId} onChange={e => setadminId(e.target.value)} >
+                    {/* { (role === 1 || role === 2) && <TextField label={"العيادة"} select sx={{minWidth : "200px"}} value={adminId} onChange={e => setadminId(e.target.value)} >
                         <MenuItem value="" > الكل </MenuItem>
                         {admins && admins.map(admin => {
                             return (
                                 <MenuItem key={admin.id} value={admin.id}> {admin.name} </MenuItem>
                             )
                         })}
-                    </TextField>}
+                    </TextField>} */}
                 </Stack>
                 
                 <Stack direction={"row"} spacing={8} alignItems={"center"}>
