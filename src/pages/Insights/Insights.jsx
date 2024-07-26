@@ -85,12 +85,12 @@ const Insights = () => {
     const [cumD, setCumD] = useState(0)
   
     useEffect(() => {
-  
+
       setCum(0)
-      clients.map(item => setCum(prev => prev + item.price))
+      clients.map(item => item.status == "مكتمل" && setCum(prev => prev + item.price))
   
       setCumD(0)
-      clients.map(item => setCumD(prev => prev + (item.price * item.doctor?.prectange / 100 )))
+      clients.map(item => item.status == "مكتمل" && setCumD(prev => prev + (item.price * item.doctor?.prectange / 100 )))
       
     } , [clients])
   
@@ -120,7 +120,7 @@ const Insights = () => {
           <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
             <Stack>
               <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> التخصصات </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {nums?.doctors_count}  </Typography>
+              <Typography fontWeight={500} color={"text"} fontSize={32} > {nums?.specialties_count}  </Typography>
             </Stack>
             <Link to={"/settings"}><IconButton sx={{color : "purple"}}> <CategoryIcon sx={{fontSize : 50}} /> </IconButton></Link>
           </Stack>

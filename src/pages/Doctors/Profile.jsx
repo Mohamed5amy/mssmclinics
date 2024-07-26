@@ -43,8 +43,8 @@ const Profile = () => {
 
     const handleDelete = () => {
         axios
-            .delete(
-                import.meta.env.VITE_API + "admin/doctor/" + id,
+            .post(
+                import.meta.env.VITE_API + "delete-doctors" , {id} ,
                 {
                     headers: {
                         Authorization:
