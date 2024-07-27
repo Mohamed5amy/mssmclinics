@@ -2,6 +2,7 @@ import {
     Button,
     IconButton,
     InputAdornment,
+    MenuItem,
     Stack,
     TextField,
     Typography,
@@ -23,12 +24,13 @@ const List = () => {
     const body = ["name", "phone", "email" , "specializeName" , "prectange"];
     const [loading, setLoading] = useState(false);
     const [admins, setAdmins] = useState([]);
+    const [clinicId, setClinicId] = useState("")
 
     // Get Admins
     useEffect(() => {
         setLoading(true);
         axios
-            .get(import.meta.env.VITE_API + "list-doctors", {
+            .get(import.meta.env.VITE_API + "list-doctors?" + `${clinicId && "clinic_id=" + clinicId + "&"}`, {
                 headers: {
                     Authorization: "Bearer " + localStorage.getItem("token"),
                 },
@@ -43,15 +45,35 @@ const List = () => {
             .finally(() => {
                 setLoading(false);
             });
-    }, []);
+    }, [clinicId]);
 
     // Search Admins
     const [search, setSearch] = useState("");
     const filteredData = useSearch({data : admins , name : "name" , search : search})
 
     const role = useRole()
+    // Filter with clinics
+    const [clinics, setClinics] = useState([])
 
-    // const [adminId, setadminId] = useState("")
+    useEffect(() => {
+        setLoading(true);
+        axios
+            .get(import.meta.env.VITE_API + "list-clinic" , {
+                headers: {
+                    Authorization: "Bearer " + localStorage.getItem("token"),
+                },
+            })
+            .then((res) => {
+                console.log(res.data.data);
+                setClinics(res.data.data);
+            })
+            .catch((err) => {
+                console.log(err);
+            })
+            .finally(() => {
+                setLoading(false);
+            });
+    }, []);
 
     return (
         <Container>
@@ -62,14 +84,14 @@ const List = () => {
 
                     <TextField type="search" sx={{ bgcolor: "primary.white" }} placeholder="البحث بالاسم" InputProps={{startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>)}} value={search} onChange={(e) => setSearch(e.target.value)}/>
 
-                    {/* { (role === 1 || role === 2) && <TextField label={"العيادة"} select sx={{minWidth : "200px"}} value={adminId} onChange={e => setadminId(e.target.value)} >
+                    { (role === 1 || role === 2) && <TextField label={"العيادة"} select sx={{minWidth : "200px"}} value={clinicId} onChange={e => setClinicId(e.target.value)} >
                         <MenuItem value="" > الكل </MenuItem>
-                        {admins && admins.map(admin => {
+                        {clinics && clinics.map(admin => {
                             return (
                                 <MenuItem key={admin.id} value={admin.id}> {admin.name} </MenuItem>
                             )
                         })}
-                    </TextField>} */}
+                    </TextField>}
                 </Stack>
                 
                 <Stack direction={"row"} spacing={8} alignItems={"center"}>

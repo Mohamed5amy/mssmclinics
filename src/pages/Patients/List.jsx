@@ -2,6 +2,7 @@ import {
     Button,
     IconButton,
     InputAdornment,
+    MenuItem,
     Stack,
     TextField,
     Typography,
@@ -26,11 +27,13 @@ const List = () => {
     const [loading, setLoading] = useState(false);
     const [admins, setAdmins] = useState([]);
 
+    const [clinicId, setClinicId] = useState("")
+
     // Get Admins
     useEffect(() => {
         setLoading(true);
         axios
-            .get(import.meta.env.VITE_API + "list-patients", {
+            .get(import.meta.env.VITE_API + "list-patients?" + `${clinicId && "clinic_id=" + clinicId + "&"}`, {
                 headers: {
                     Authorization: "Bearer " + localStorage.getItem("token"),
                 },
@@ -45,7 +48,7 @@ const List = () => {
             .finally(() => {
                 setLoading(false);
             });
-    }, []);
+    }, [clinicId]);
 
     // Search Admins
     const [search, setSearch] = useState("");
@@ -54,23 +57,46 @@ const List = () => {
     
     const role = useRole();
 
+    // Filter with clinics
+    const [clinics, setClinics] = useState([])
+
+    useEffect(() => {
+        setLoading(true);
+        axios
+            .get(import.meta.env.VITE_API + "list-clinic" , {
+                headers: {
+                    Authorization: "Bearer " + localStorage.getItem("token"),
+                },
+            })
+            .then((res) => {
+                console.log(res.data.data);
+                setClinics(res.data.data);
+            })
+            .catch((err) => {
+                console.log(err);
+            })
+            .finally(() => {
+                setLoading(false);
+            });
+    }, []);
+
     return (
         <Container>
             {/* Filter */}
             <Stack direction={{xs : "column" , sm : "row"}} alignItems={"center"} justifyContent={"space-between"} mb={8} spacing={8} >
-                <TextField type="search"
-                    sx={{ bgcolor: "primary.white" }}
-                    placeholder="البحث بالاسم"
-                    InputProps={{
-                        startAdornment: (
-                            <InputAdornment position="start">
-                                <SearchIcon />
-                            </InputAdornment>
-                        ),
-                    }}
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
+                <Stack direction={{xs : "column" , sm : "row"}} spacing={4}>
+
+                    <TextField type="search" sx={{ bgcolor: "primary.white" }} placeholder="البحث بالاسم" InputProps={{startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>)}} value={search} onChange={(e) => setSearch(e.target.value)}/>
+
+                    { (role === 1 || role === 2) && <TextField label={"العيادة"} select sx={{minWidth : "200px"}} value={clinicId} onChange={e => setClinicId(e.target.value)} >
+                        <MenuItem value="" > الكل </MenuItem>
+                        {clinics && clinics.map(admin => {
+                            return (
+                                <MenuItem key={admin.id} value={admin.id}> {admin.name} </MenuItem>
+                            )
+                        })}
+                    </TextField>}
+                </Stack>
                 <Stack direction={"row"} spacing={8} alignItems={"center"}>
                     {role === 3 && <Link to={"add"}>
                         <Button startIcon={<AddCircleOutlineRoundedIcon />} variant="contained" sx={{ p: "16px 40px", borderRadius: "8px" }} > اضافة مريض </Button>

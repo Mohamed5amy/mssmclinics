@@ -159,7 +159,7 @@ const AdminData = ({ admin, setOpen }) => {
                     <Typography variant="body"> {admin?.phone} </Typography>
                 </Stack>
                 {/* Icons */}
-                {role == 3 && <Stack spacing={4} direction={"row"} alignItems={"center"}>
+                {(role == 3 || role == 1) && <Stack spacing={4} direction={"row"} alignItems={"center"}>
                     <IconButton color="error" onClick={() => setOpen(true)}>
                         <DeleteOutlineRoundedIcon />
                     </IconButton>
