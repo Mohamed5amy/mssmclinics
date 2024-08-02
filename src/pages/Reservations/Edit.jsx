@@ -408,7 +408,6 @@ const Clients_Edit = () => {
                     </Grid>}
                     {(role === 4 || role === 3) && <Stack mt={8}>
                         <Input
-                            required={true}
                             type={"text"}
                             label={"التشخيص"}
                             register={register}
