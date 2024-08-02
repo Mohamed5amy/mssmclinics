@@ -101,7 +101,7 @@ const Insights = () => {
         <Grid item xs={12} sm={6} md={3}>
           <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
             <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> الاطباء </Typography>
+              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> الدكاترة </Typography>
               <Typography fontWeight={500} color={"text"} fontSize={32} > {nums?.doctors_count}  </Typography>
             </Stack>
             <Link to={"/doctors-list"}><IconButton sx={{color : "#11CAF2"}}> <SupervisorAccountIcon sx={{fontSize : 50}} /> </IconButton></Link>
