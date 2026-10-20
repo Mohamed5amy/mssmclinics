@@ -5,16 +5,22 @@ import { baseSchemaOptions } from '../../common/schema/base-schema';
 export type ReservationDocument = HydratedDocument<Reservation>;
 
 /**
- * The three values the dashboard's status dropdown sends, stored as-is because
- * the pages compare against the Arabic text (`status == "مكتمل"`).
+ * The values the dashboard's status dropdown sends, stored as-is because the
+ * pages compare against the Arabic text (`status == "مكتمل"`). A no-show
+ * (لم يحضر) is a booked patient who never checked in: set by the desk, or
+ * automatically once the day is over.
  */
 export const ReservationStatus = {
   Pending: 'فى الانتظار',
   Completed: 'مكتمل',
   Canceled: 'ملغي',
+  NoShow: 'لم يحضر',
 } as const;
 
 export const RESERVATION_STATUSES: string[] = Object.values(ReservationStatus);
+
+/** Visits off the day: canceled, or the patient never came. They hold no slot and no turn. */
+export const AWAY_STATUSES: string[] = [ReservationStatus.Canceled, ReservationStatus.NoShow];
 
 /** Booked ahead (by phone, for a chosen day) or walked in off the street today. */
 export const BookingType = {
@@ -112,6 +118,10 @@ export class Reservation {
   @Prop({ default: false })
   outside_hours: boolean;
 
+  /** When the desk last sent the patient a reminder (on WhatsApp), so it isn't sent twice. */
+  @Prop({ type: Date, default: null })
+  reminded_at: Date | null;
+
   /** When the patient checked in at the desk. Walk-ins arrive when they're booked. */
   @Prop({ type: Date, default: null })
   arrived_at: Date | null;
@@ -156,3 +166,4 @@ export const ReservationSchema = SchemaFactory.createForClass(Reservation);
 ReservationSchema.index({ group_id: 1, date: 1 });
 ReservationSchema.index({ clinic_id: 1, doctor_id: 1, date: 1 });
 ReservationSchema.index({ patient_id: 1, doctor_id: 1, date: 1 });
+ReservationSchema.index({ status: 1, date: 1 });

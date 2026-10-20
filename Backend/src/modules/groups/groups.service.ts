@@ -6,6 +6,8 @@ import { AccountsService } from '../../database/accounts.service';
 import { hashPassword } from '../auth/auth.service';
 import { Clinic } from '../clinics/clinic.schema';
 import { Doctor } from '../doctors/doctor.schema';
+import { DoctorPayout } from '../finance/payout.schema';
+import { MedicalService } from '../medical/medical.service';
 import { Patient } from '../patients/patient.schema';
 import { Provider } from '../providers/provider.schema';
 import { Reservation } from '../reservations/reservation.schema';
@@ -40,6 +42,8 @@ export class GroupsService {
     @InjectModel(Provider.name) private readonly providers: Model<Provider>,
     @InjectModel(DoctorSchedule.name) private readonly schedules: Model<DoctorSchedule>,
     @InjectModel(ScheduleException.name) private readonly exceptions: Model<ScheduleException>,
+    @InjectModel(DoctorPayout.name) private readonly payouts: Model<DoctorPayout>,
+    private readonly medical: MedicalService,
     private readonly counters: CountersService,
     private readonly accounts: AccountsService,
   ) {}
@@ -171,6 +175,8 @@ export class GroupsService {
       this.providers.deleteMany(owned),
       this.schedules.deleteMany(owned),
       this.exceptions.deleteMany(owned),
+      this.medical.forget(owned),
+      this.payouts.deleteMany(owned),
     ]);
     await this.model.deleteOne({ id });
 

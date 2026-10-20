@@ -10,10 +10,12 @@ import { hashPassword } from '../modules/auth/auth.service';
 import { Clinic } from '../modules/clinics/clinic.schema';
 import { Doctor } from '../modules/doctors/doctor.schema';
 import { FollowupRule, Group, GroupStatus } from '../modules/groups/group.schema';
+import { DoctorPayout } from '../modules/finance/payout.schema';
+import { PatientAttachment } from '../modules/medical/attachment.schema';
 import { Patient } from '../modules/patients/patient.schema';
 import { Provider } from '../modules/providers/provider.schema';
 import { followupApplies, followupPrice, queueNumbers } from '../modules/reservations/followup';
-import { BookingType, Payment, Reservation, ReservationStatus } from '../modules/reservations/reservation.schema';
+import { AWAY_STATUSES, BookingType, Payment, Reservation, ReservationStatus } from '../modules/reservations/reservation.schema';
 import { WeeklyPeriod, hoursOn, withinHours } from '../modules/schedules/hours';
 import { DoctorSchedule, ScheduleException } from '../modules/schedules/schedule.schema';
 import { Service } from '../modules/services/service.schema';
@@ -120,6 +122,12 @@ interface GroupSpec {
   upcoming: Array<{ branch: string; doctor: string; patient: number; day: number; time: string; pay: number }>;
   /** Dates set apart from the weekly hours, `day` days from today. */
   exceptions: Array<{ branch: string; doctor: string; day: number; closed: boolean; hours?: Array<[string, string]>; note: string }>;
+  /** Medical backgrounds, by patient index, as a doctor left them. */
+  medical?: Array<{ patient: number; doctor: string; chronic: string[]; allergies: string[]; medications: string[]; notes?: string }>;
+  /** Past bookings the patient never came to (لم يحضر). */
+  noShows?: Array<{ branch: string; doctor: string; patient: number; day: number; time: string }>;
+  /** Money the owner paid doctors towards their share, `day` days from today. */
+  payouts?: Array<{ doctor: string; day: number; amount: number; note: string }>;
 }
 
 /**
@@ -233,6 +241,29 @@ const GROUPS: GroupSpec[] = [
       { branch: 'nasr', doctor: 'mona@mssm.test', day: 3, closed: true, note: 'إجازة' },
       { branch: 'maadi', doctor: 'karim@mssm.test', day: 2, closed: false, hours: [['18:00', '22:00']], note: 'مواعيد متأخرة' },
     ],
+    medical: [
+      {
+        patient: 0,
+        doctor: 'karim@mssm.test',
+        chronic: ['سكر', 'ضغط'],
+        allergies: ['بنسلين'],
+        medications: ['جلوكوفاج 500 مجم مرتين يومياً', 'كونكور 5 مجم صباحاً'],
+        notes: 'متابعة السكر التراكمي كل 3 شهور',
+      },
+      { patient: 2, doctor: 'karim@mssm.test', chronic: ['ربو'], allergies: [], medications: ['فنتولين بخاخ عند اللزوم'] },
+      { patient: 5, doctor: 'mona@mssm.test', chronic: [], allergies: ['أسبرين', 'سلفا'], medications: [] },
+    ],
+    // Karim was paid last month's share, and something on account this month.
+    payouts: [
+      { doctor: 'karim@mssm.test', day: -25, amount: 1500, note: 'مستحقات الشهر اللي فات' },
+      { doctor: 'karim@mssm.test', day: -3, amount: 500, note: 'دفعة تحت الحساب' },
+    ],
+    // Ziad (in today's queue) missed two bookings; Karim Waleed one.
+    noShows: [
+      { branch: 'nasr', doctor: 'karim@mssm.test', patient: 6, day: -9, time: '11:00' },
+      { branch: 'maadi', doctor: 'hala@mssm.test', patient: 6, day: -16, time: '13:00' },
+      { branch: 'nasr', doctor: 'mona@mssm.test', patient: 8, day: -5, time: '12:00' },
+    ],
   },
   {
     name: 'عيادة الشفاء للأسنان',
@@ -269,6 +300,9 @@ const GROUPS: GroupSpec[] = [
       },
     ],
     patients: ['علي محمد', 'جنى أحمد', 'حسام الدين', 'مريم سامي', 'عمر خالد', 'هنا ياسر', 'ملك حسن', 'زياد أشرف'],
+    medical: [
+      { patient: 0, doctor: 'tarek@mssm.test', chronic: ['سكر'], allergies: ['ليدوكايين (بنج موضعي)'], medications: ['أماريل 2 مجم صباحاً'] },
+    ],
     randomVisits: 26,
     history: [
       { branch: 'dokki', doctor: 'tarek@mssm.test', patient: 0, service: 'كشف أسنان', day: -5, hour: 13 },
@@ -385,12 +419,14 @@ async function seed() {
   const counters = model<Counter>(Counter.name);
   const schedules = model<DoctorSchedule>(DoctorSchedule.name);
   const exceptions = model<ScheduleException>(ScheduleException.name);
+  const attachments = model<PatientAttachment>(PatientAttachment.name);
+  const payouts = model<DoctorPayout>(DoctorPayout.name);
 
   const database = admins.db.name;
   logger.log(`Clearing database "${database}"...`);
   const collections: Model<any>[] = [
     admins, groups, staff, clinics, doctors, patients, providers, reservations, services, specialties, counters,
-    schedules, exceptions,
+    schedules, exceptions, attachments, payouts,
   ];
   // A clean slate: dropping the database also clears collections and indexes
   // left over from older shapes of the data; the indexes are then rebuilt from
@@ -508,6 +544,14 @@ async function seed() {
     }));
 
     // --- Patients: one file per patient for the whole group ---------------------
+    const background = (i: number) => {
+      const row = spec.medical?.find((item) => item.patient === i);
+      if (!row) return {};
+      const { patient: _patient, doctor, notes, ...lists } = row;
+      return {
+        medical: { ...lists, notes: notes ?? '', updated_at: at(-3, 12), updated_by: spec.doctors.find((d) => d.email === doctor).name },
+      };
+    };
     const patientRows = spec.patients.map((name, i) => ({
       ...owned,
       id: nextId('patient'),
@@ -518,6 +562,7 @@ async function seed() {
       address: `${pick(ADDRESSES)}، القاهرة`,
       provider_id: pick(providerRows).id,
       registered_clinic_id: pick(branchRows).id,
+      ...background(i),
     }));
     await patients.insertMany(patientRows);
 
@@ -578,6 +623,22 @@ async function seed() {
     }
 
     // Bookings for the coming days - one left a deposit.
+    for (const missed of spec.noShows ?? []) {
+      drafts.push({
+        clinic_id: branchId(missed.branch),
+        patient_id: patientRows[missed.patient].id,
+        doctor_id: doctorEmailed(missed.doctor).id,
+        service_id: serviceNamed(spec.followup.service).id,
+        date: at(missed.day, +missed.time.slice(0, 2), +missed.time.slice(3)),
+        time: missed.time,
+        booking_type: BookingType.Booked,
+        status: ReservationStatus.NoShow,
+        arrived_at: null,
+        called_at: null,
+        pay: 0,
+      });
+    }
+
     for (const booking of spec.upcoming) {
       drafts.push({
         clinic_id: branchId(booking.branch),
@@ -639,7 +700,7 @@ async function seed() {
               row.doctor_id === draft.doctor_id &&
               rule.service_ids.includes(row.service_id) &&
               !row.is_followup &&
-              row.status !== ReservationStatus.Canceled &&
+              !AWAY_STATUSES.includes(row.status) &&
               row.date >= since,
           )
           .pop();
@@ -683,6 +744,7 @@ async function seed() {
         date: draft.date,
         time: draft.time ?? toTimeString(draft.date),
         outside_hours: false,
+        reminded_at: null,
         booking_type: draft.booking_type,
         queue_number: 0,
         arrived_at: draft.arrived_at,
@@ -709,6 +771,19 @@ async function seed() {
     }
 
     await reservations.insertMany(rows);
+
+    await payouts.insertMany(
+      (spec.payouts ?? []).map((payout) => ({
+        ...owned,
+        id: nextId('payout'),
+        doctor_id: doctorEmailed(payout.doctor).id,
+        amount: payout.amount,
+        paid_at: at(payout.day, 13),
+        note: payout.note,
+        recorded_by_id: ownerId,
+        recorded_by_name: spec.owner.name,
+      })),
+    );
     reservationCount += rows.length;
   }
 

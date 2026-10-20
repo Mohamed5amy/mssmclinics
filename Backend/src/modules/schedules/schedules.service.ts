@@ -6,7 +6,7 @@ import { endOfDay, startOfDay, toDateString, toTimeString } from '../../common/d
 import { LookupsService } from '../../database/lookups.service';
 import { ScopeService } from '../../database/scope.service';
 import { Doctor } from '../doctors/doctor.schema';
-import { Reservation, ReservationStatus } from '../reservations/reservation.schema';
+import { AWAY_STATUSES, Reservation, ReservationStatus } from '../reservations/reservation.schema';
 import { CalendarQueryDto, ResetDayDto, SaveDayDto, SaveWeeklyDto, SlotsQueryDto } from './dto/schedule.dto';
 import {
   DEFAULT_SLOT_MINUTES,
@@ -121,13 +121,13 @@ export class SchedulesService {
     return { ...schedule, days };
   }
 
-  /** Visits holding a place in the doctor's days at a branch - anything not canceled - oldest booking first. */
+  /** Visits holding a place in the doctor's days at a branch - not canceled, not a no-show - oldest booking first. */
   private booked(doctorId: number, clinicId: number, start: string, end: string, exclude?: number): Promise<Holding[]> {
     return this.reservations
       .find({
         doctor_id: doctorId,
         clinic_id: clinicId,
-        status: { $ne: ReservationStatus.Canceled },
+        status: { $nin: AWAY_STATUSES },
         date: { $gte: startOfDay(start), $lte: endOfDay(end) },
         ...(exclude ? { id: { $ne: exclude } } : {}),
       })

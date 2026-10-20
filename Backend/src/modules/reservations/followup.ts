@@ -1,5 +1,5 @@
 import { FollowupRule } from '../groups/group.schema';
-import { ReservationStatus } from './reservation.schema';
+import { AWAY_STATUSES } from './reservation.schema';
 
 /**
  * The pricing half of the group's re-visit rule, and how a day's queue is
@@ -10,12 +10,12 @@ import { ReservationStatus } from './reservation.schema';
 /**
  * The queue numbers (الدور) of one doctor's day at one branch, by appointment
  * time: the earliest slot is 1. Ties go to the earlier booking, visits with no
- * set time come after the timed ones, and canceled visits are numbered after
- * everyone still expected, so those keep consecutive numbers.
+ * set time come after the timed ones, and canceled visits and no-shows are
+ * numbered after everyone still expected, so those keep consecutive numbers.
  */
 export function queueNumbers(visits: Array<{ id: number; time?: string; status: string }>): Map<number, number> {
   const rank = (visit: { id: number; time?: string; status: string }) =>
-    [visit.status === ReservationStatus.Canceled ? 1 : 0, visit.time || '99:99', visit.id] as const;
+    [AWAY_STATUSES.includes(visit.status) ? 1 : 0, visit.time || '99:99', visit.id] as const;
   const sorted = [...visits].sort((a, b) => {
     const [x, y] = [rank(a), rank(b)];
     return x[0] - y[0] || x[1].localeCompare(y[1]) || x[2] - y[2];

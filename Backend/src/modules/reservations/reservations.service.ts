@@ -31,7 +31,7 @@ import {
   UpdateReservationDto,
 } from './dto/reservation.dto';
 import { followupApplies, followupPrice, queueNumbers } from './followup';
-import { BookingType, Payment, Reservation, ReservationStatus } from './reservation.schema';
+import { AWAY_STATUSES, BookingType, Payment, Reservation, ReservationStatus } from './reservation.schema';
 
 /** Amounts are EGP and may carry piastres; keep sums from drifting. */
 const money = (value: number) => Math.round(value * 100) / 100;
@@ -46,6 +46,7 @@ const fieldError = (field: string, message: string) =>
  */
 function queueState(row: Reservation): string {
   if (row.status === ReservationStatus.Canceled) return 'canceled';
+  if (row.status === ReservationStatus.NoShow) return 'no_show';
   if (row.status === ReservationStatus.Completed) return 'done';
   if (row.called_at) return 'with_doctor';
   if (row.arrived_at) return 'waiting';
@@ -117,6 +118,7 @@ export class ReservationsService {
         payment_method: payments.length ? payments[payments.length - 1].method : '',
         queue_state: queueState(row as Reservation),
         name: patients.get(row.patient_id)?.name ?? '',
+        patientPhone: patients.get(row.patient_id)?.phone ?? '',
         doctorName: doctor?.name ?? '',
         doctorSpecalite: doctor ? specialties.get(doctor.specialtie_id)?.title ?? '' : '',
         clinicBranch: clinic?.branch ?? '',
@@ -139,7 +141,32 @@ export class ReservationsService {
     return filter;
   }
 
+  /**
+   * Once its day is over, a booked visit whose patient never checked in is a
+   * no-show (لم يحضر). Settled here, before visits are read - lists, the
+   * queue, a visit, a file - rather than by a timer, so every screen is current
+   * and nothing runs in the background. Returns how many were marked.
+   */
+  async markNoShows(): Promise<number> {
+    const rows = await this.model
+      .find({ status: ReservationStatus.Pending, arrived_at: null, date: { $lt: startOfDay(new Date()) } })
+      .select('id clinic_id doctor_id date')
+      .lean();
+    if (!rows.length) return 0;
+
+    await this.model.updateMany(
+      { id: { $in: rows.map((row) => row.id) }, status: ReservationStatus.Pending },
+      { $set: { status: ReservationStatus.NoShow } },
+    );
+    const days = new Map(rows.map((row) => [`${row.clinic_id}:${row.doctor_id}:${toDateString(new Date(row.date))}`, row]));
+    for (const row of days.values()) {
+      await this.renumber(row.clinic_id, row.doctor_id, new Date(row.date));
+    }
+    return rows.length;
+  }
+
   async findAll(query: ListReservationsDto, user: AuthUser) {
+    await this.markNoShows();
     const filter = this.scopeFor(user, query.clinic_id, query.group_id);
 
     if (query.doctor_id) filter.doctor_id = user.role === 'doctor' ? user.id : query.doctor_id;
@@ -160,6 +187,7 @@ export class ReservationsService {
   }
 
   async findOne(id: number, user: AuthUser) {
+    await this.markNoShows();
     const [decorated] = await this.decorate([await this.findScoped(id, user)], user);
     return decorated;
   }
@@ -170,14 +198,37 @@ export class ReservationsService {
    * doctor who works at several.
    */
   async findForDoctor(doctorId: number, user: AuthUser) {
+    await this.markNoShows();
     const filter = { ...this.scopeFor(user), doctor_id: doctorId };
     if (user.role === 'doctor' && doctorId !== user.id) return [];
     return this.decorate(await this.model.find(filter).sort({ date: -1 }).lean(), user);
   }
 
   async findForPatient(patientId: number, user: AuthUser) {
+    await this.markNoShows();
     const filter = { ...this.scopeFor(user), patient_id: patientId };
     return this.decorate(await this.model.find(filter).sort({ date: -1 }).lean(), user);
+  }
+
+  /**
+   * A patient's visits at every branch with every doctor of the group: the
+   * medical file's history, which any of the group's doctors may read. Not for
+   * the front desk (MedicalController doesn't let it in).
+   */
+  async historyOf(patientId: number, groupId: number, user: AuthUser) {
+    await this.markNoShows();
+    const rows = await this.model.find({ patient_id: patientId, group_id: groupId }).sort({ date: -1, id: -1 }).lean();
+    return this.decorate(rows, user);
+  }
+
+  /** How many times each of the group's patients didn't come, for the booking form's warning. */
+  async noShowCounts(filter: { group_id?: number | { $in: number[] } }): Promise<Map<number, number>> {
+    await this.markNoShows();
+    const counts = await this.model.aggregate<{ _id: number; count: number }>([
+      { $match: { ...filter, status: ReservationStatus.NoShow } },
+      { $group: { _id: '$patient_id', count: { $sum: 1 } } },
+    ]);
+    return new Map(counts.map((row) => [row._id, row.count]));
   }
 
   /**
@@ -300,7 +351,7 @@ export class ReservationsService {
         doctor_id: input.doctor_id,
         service_id: { $in: rule.service_ids },
         is_followup: { $ne: true },
-        status: { $ne: ReservationStatus.Canceled },
+        status: { $nin: AWAY_STATUSES },
         date: { $gte: since, $lte: input.when },
         ...(input.exclude ? { id: { $ne: input.exclude } } : {}),
       })
@@ -374,6 +425,9 @@ export class ReservationsService {
     const today = isSameDay(when, now);
     const bookingType = dto.booking_type ?? (today ? BookingType.WalkIn : BookingType.Booked);
     const status = dto.status ?? ReservationStatus.Pending;
+    if (status === ReservationStatus.NoShow) {
+      throw fieldError('status', "A new booking can't be a no-show");
+    }
 
     const { followup_date: _hint, ...pricing } = await this.pricing(groupId, {
       patient_id: dto.patient_id,
@@ -387,7 +441,7 @@ export class ReservationsService {
     this.assertDiscount(discount, pricing.price);
 
     const paid = dto.paid ?? 0;
-    if (paid > 0 && status === ReservationStatus.Canceled) {
+    if (paid > 0 && AWAY_STATUSES.includes(status)) {
       throw fieldError('paid', "A canceled visit can't take a payment");
     }
     if (paid > pricing.price - discount) {
@@ -429,6 +483,15 @@ export class ReservationsService {
   async update({ id, apply_followup, date, time, override_hours, ...changes }: UpdateReservationDto, user: AuthUser) {
     const existing = await this.findScoped(id, user);
     if (user.role === 'receptionist') delete changes.Diagnosis;
+
+    if (changes.status === ReservationStatus.NoShow && existing.status !== ReservationStatus.NoShow) {
+      if (existing.arrived_at) {
+        throw fieldError('status', 'This patient has arrived');
+      }
+      if (startOfDay(existing.date) > startOfDay(new Date())) {
+        throw fieldError('status', "A visit on a later day can't be a no-show - cancel it instead");
+      }
+    }
 
     const differs = <K extends 'patient_id' | 'doctor_id' | 'service_id'>(key: K) =>
       changes[key] !== undefined && changes[key] !== existing[key];
@@ -522,6 +585,7 @@ export class ReservationsService {
 
   /** One day's visits in queue order, per branch and doctor. A doctor only gets their own. */
   async queue(query: QueueQueryDto, user: AuthUser) {
+    await this.markNoShows();
     const filter = this.scopeFor(user, query.clinic_id, query.group_id);
     if (query.doctor_id && user.role !== 'doctor') filter.doctor_id = query.doctor_id;
 
@@ -530,6 +594,13 @@ export class ReservationsService {
 
     const rows = await this.model.find(filter).sort({ clinic_id: 1, doctor_id: 1, queue_number: 1, id: 1 }).lean();
     return this.decorate(rows, user);
+  }
+
+  /** The desk sent the patient a reminder (on WhatsApp), so the list shows it as done. */
+  async markReminded(id: number, user: AuthUser) {
+    await this.findScoped(id, user);
+    await this.model.updateOne({ id }, { $set: { reminded_at: new Date() } });
+    return this.findOne(id, user);
   }
 
   /** The desk marks a booked patient as arrived, which puts them in line. */
@@ -609,6 +680,9 @@ export class ReservationsService {
 
     if (row.status === ReservationStatus.Canceled) {
       throw fieldError('amount', "A canceled visit can't take a payment");
+    }
+    if (row.status === ReservationStatus.NoShow) {
+      throw fieldError('amount', "A no-show can't take a payment");
     }
     if (money(amount) > balance(row).remaining) {
       throw fieldError('amount', 'The amount is more than what is left to pay');

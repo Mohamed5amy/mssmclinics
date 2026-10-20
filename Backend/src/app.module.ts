@@ -10,8 +10,10 @@ import { SchemasModule } from './database/schemas.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClinicsModule } from './modules/clinics/clinics.module';
 import { DoctorsModule } from './modules/doctors/doctors.module';
+import { FinanceModule } from './modules/finance/finance.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { HomeModule } from './modules/home/home.module';
+import { MedicalModule } from './modules/medical/medical.module';
 import { PatientsModule } from './modules/patients/patients.module';
 import { ProvidersModule } from './modules/providers/providers.module';
 import { ReceptionistsModule } from './modules/receptionists/receptionists.module';
@@ -38,12 +40,14 @@ import { SpecialtiesModule } from './modules/specialties/specialties.module';
     DoctorsModule,
     ReceptionistsModule,
     PatientsModule,
+    MedicalModule,
     ReservationsModule,
     SchedulesModule,
     SpecialtiesModule,
     ProvidersModule,
     ServicesModule,
     HomeModule,
+    FinanceModule,
   ],
   providers: [
     // Order matters: authenticate first, then check the role.

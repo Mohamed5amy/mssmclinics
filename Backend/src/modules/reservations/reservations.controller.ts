@@ -88,6 +88,13 @@ export class ReservationsController {
 
   @Roles('owner', 'receptionist')
   @HttpCode(HttpStatus.OK)
+  @Post('mark-reminded')
+  markReminded(@Body() dto: DeleteDto, @CurrentUser() user: AuthUser) {
+    return this.reservations.markReminded(dto.id, user);
+  }
+
+  @Roles('owner', 'receptionist')
+  @HttpCode(HttpStatus.OK)
   @Post('check-in-reservation')
   checkIn(@Body() dto: DeleteDto, @CurrentUser() user: AuthUser) {
     return this.reservations.checkIn(dto.id, user);

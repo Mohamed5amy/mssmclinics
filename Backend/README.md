@@ -61,7 +61,10 @@ rule - including a patient seen by Dr. Karim at Nasr City who came back to him a
 Maadi for free. النور re-visits are free within 14 days, الشفاء's cost 100 EGP
 within 7. Every doctor has weekly hours (Saturday to Thursday; Karim mornings at
 Nasr City and evenings at Maadi, Tarek a split day, Yasmin 30-minute slots), Mona
-has a day off in 3 days and Karim later hours at Maadi in 2.
+has a day off in 3 days and Karim later hours at Maadi in 2. Youssef (diabetic,
+allergic to penicillin), Mahmoud and Dina have medical backgrounds; Ziad, in
+today's queue, missed two bookings and Karim Waleed one. The owner paid Karim
+1,500 EGP last month and 500 on account this month.
 
 ### Configuration
 
@@ -90,12 +93,15 @@ platform owner (admins) ── sees everything, including diagnoses; creates, ed
         │        payments; the only one who deletes visits, payments or patients
         ├─ doctor (doctors) ── works at one or more of the group's branches; sees
         │        their own visits and queues, calls the next patient, writes the
-        │        diagnosis, sets their own working hours
+        │        diagnosis, sets their own working hours; reads and updates any
+        │        of the group's patients' medical file
         └─ branch (clinics) ── data only, no sign-in; open or closed
              └─ receptionist (staff, role receptionist) ── one branch's front
                       desk: registers patients, books, checks in, takes payments,
-                      calls next, sets the hours of its branch's doctors. Never
-                      sees income, settings, doctors' percentages or diagnoses;
+                      calls next, sets the hours of its branch's doctors, marks
+                      no-shows, sends WhatsApp messages, sees its branch's day of
+                      cash. Never sees income reports, settings, doctors'
+                      percentages or statements, diagnoses or the medical file;
                       can't delete.
 ```
 
@@ -153,6 +159,16 @@ Roles: P platform, O owner, R receptionist, D doctor. "scoped" means everyone, e
 | `POST clinic/add-payment` | O, R | `{ id, amount, method }`; never more than what is left |
 | `POST clinic/delete-payment` | O | `{ id, payment_id }` |
 | `POST doctor/update-reservations` | D | diagnosis only |
+| `GET patient-medical/:id` | P, O, D | the medical file: `medical` (background), `visits` (every branch and doctor, with diagnoses, no money), `attachments`, `no_shows` |
+| `POST patient-medical` | O, D | `{ patient_id, chronic[], allergies[], medications[], notes }` - replaces the background |
+| `POST patient-attachments` | O, D | multipart: `file` (JPG, PNG, WEBP or PDF, up to 10 MB), `patient_id`, `kind` (`lab` / `radiology` / `report` / `other`), optional `reservation_id`, `title` |
+| `GET patient-attachment/:id` | P, O, D | the file itself, inline |
+| `POST delete-patient-attachment` | O, D | the owner any file, a doctor the ones they added |
+| `GET cash-report?date&clinic_id&group_id` | P, O, R | one day's payments by when they were paid: `total`, `by_method`, `by_staff`, `payments`. R its branch |
+| `GET doctor-statement?doctor_id&start&end` | P, O, D | `opening`, `collected`, `share`, `paid_out`, `closing`, the period's `visits` and `payouts` (this month by default). D always gets their own |
+| `POST doctor-payout` | O | `{ doctor_id, amount, date, note }`: money paid to the doctor towards their share; more than is owed is an advance |
+| `POST delete-doctor-payout` | O | `{ id }` |
+| `POST mark-reminded` | O, R | `{ id }`: the desk sent a reminder; sets `reminded_at` |
 | `GET doctor-schedule?doctor_id` | scoped | the doctor's weekly hours and `slot_minutes` at each branch the caller reaches |
 | `GET doctor-calendar?doctor_id&clinic_id&start&end` | scoped | per day: `hours`, `source` (`weekly` / `custom` / `closed`), `note`, `slots`, `booked`, `free`; up to 62 days |
 | `GET doctor-slots?doctor_id&clinic_id&date&exclude` | scoped | one day's slots: `time`, `end`, `state` (`free` / `taken` / `past`) and the `visit` holding it; `others` = visits off the slots |
@@ -204,6 +220,33 @@ price and the doctor's percentage, so later changes don't rewrite past income.
   completes whoever is with the doctor at that branch and calls the arrived
   patient with the lowest number (`called_at`). Rows carry `queue_state`:
   `not_arrived`, `waiting`, `with_doctor`, `done` or `canceled`.
+- **No-shows (لم يحضر).** A booked patient who never checked in. The desk marks
+  one by hand (status `لم يحضر` on `clinic/edit-reservation`; only for a patient who
+  hasn't arrived, on a day that has come), and once the day is over every such
+  visit is marked automatically. That is settled whenever visits are read (lists,
+  the queue, a visit, a patient, the medical file) rather than by a timer. A
+  no-show holds no slot and no turn, takes no payment and isn't a full visit for
+  the re-visit rule; rows carry `queue_state: no_show`, and patients carry
+  `no_shows`, the count the booking form warns with.
+- **Medical file.** Each patient has a `medical` background (`chronic`, `allergies`,
+  `medications`, `notes`, `updated_at`, `updated_by`) that the group's doctors and
+  owner keep up to date, and attachments (`patient_attachments`, bytes in the
+  GridFS bucket `attachments`, so they're in the database's backups). Any of the
+  group's doctors reads the whole history, across branches and doctors; the front
+  desk gets none of it (`medical` is stripped from its patient responses).
+  Deleting a patient or a group deletes their files.
+- **The day's cash (الخزنة).** `cash-report` adds up a day's payments by when they
+  were taken, not by the visit's day (a deposit for next week counts today), per
+  payment method - cash is what the drawer should hold - and per person who took
+  them. A report only: there is no closing step and no expenses.
+- **Doctors' statements.** A doctor's share of a visit is the percentage
+  snapshotted on it times what its patient paid; canceled visits and no-shows
+  earn nothing. `doctor-statement` gives the share for a period, the payouts the
+  owner recorded (`doctor_payouts`), and the balance before and after; a payout
+  can exceed what is owed, which shows as an advance.
+- **WhatsApp.** The dashboard writes the confirmation, reminder and receipt and
+  opens them in the desk's own WhatsApp (wa.me links, no paid service). Visits
+  carry `patientPhone` and `reminded_at`.
 - **Payments.** Recorded by hand: there is no online payment integration. A visit
   has `discount` (EGP) and a `payments` list (`amount`, `method` = `cash`,
   `instapay`, `vodafone_cash` or `card`, `paid_at`, `recorded_by_role` = `owner` or
@@ -234,6 +277,12 @@ name. It signs in as every kind of account and checks that:
 - doctors' hours: who may set them, no overlap between branches, bookings only in
   free slots (and the owner's override), days off and other hours, and changes
   refused while patients are booked in the hours being removed;
+- the medical file: who reads and writes it, the history across doctors without
+  money, uploads, downloads and who may delete them;
+- no-shows: marked by hand (and when not), automatically once the day is over,
+  and counted on the patient;
+- the day's cash per branch, method and person; reminders marked as sent;
+  doctors' statements adding up, and payouts;
 - closing a branch and moving a receptionist take effect.
 
 It deletes what it created, so it can be run again.

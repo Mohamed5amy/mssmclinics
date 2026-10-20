@@ -10,6 +10,7 @@ import { LookupsService } from '../../database/lookups.service';
 import { ScopeService } from '../../database/scope.service';
 import { hashPassword } from '../auth/auth.service';
 import { Clinic, ClinicStatus } from '../clinics/clinic.schema';
+import { DoctorPayout } from '../finance/payout.schema';
 import { Reservation, ReservationStatus } from '../reservations/reservation.schema';
 import { DoctorSchedule, ScheduleException } from '../schedules/schedule.schema';
 import { ReservationsService } from '../reservations/reservations.service';
@@ -26,6 +27,7 @@ export class DoctorsService {
     @InjectModel(Reservation.name) private readonly reservations: Model<Reservation>,
     @InjectModel(DoctorSchedule.name) private readonly schedules: Model<DoctorSchedule>,
     @InjectModel(ScheduleException.name) private readonly exceptions: Model<ScheduleException>,
+    @InjectModel(DoctorPayout.name) private readonly payouts: Model<DoctorPayout>,
     private readonly counters: CountersService,
     private readonly lookups: LookupsService,
     private readonly scope: ScopeService,
@@ -168,6 +170,7 @@ export class DoctorsService {
     await this.assertNoUpcoming(id);
     await this.model.deleteOne({ id });
     await this.forgetHours({ doctor_id: id });
+    await this.payouts.deleteMany({ doctor_id: id });
     return { id };
   }
 

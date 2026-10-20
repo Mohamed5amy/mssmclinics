@@ -1,6 +1,7 @@
 // Smoke test for the MSSM backend: the platform -> group -> branch structure,
 // every role's reach and limits, doctors' hours and booking into them, the
-// queue, payments and the re-visit rule.
+// queue, payments, the re-visit rule, the medical file, no-shows, the day's
+// cash, doctors' statements and reminders.
 //
 //   npm run seed     (the test expects the seeded demo data)
 //   npm run dev      (in another terminal)
@@ -52,6 +53,20 @@ const ALL_TIME = 'start_date=2000-01-01&end_date=2100-01-01&';
 /** The same periods on every day of the week. */
 const everyDay = (...periods) => [0, 1, 2, 3, 4, 5, 6].flatMap((weekday) => periods.map(([start, end]) => ({ weekday, start, end })));
 const ids = (rows) => (rows ?? []).map((row) => row.id).sort((a, b) => a - b).join();
+const round2 = (value) => Math.round(value * 100) / 100;
+
+/** Uploads a file to a patient's medical file (multipart, as the dashboard sends it). */
+const upload = async (token, fields, bytes, name, type) => {
+  const form = new FormData();
+  Object.entries(fields).forEach(([key, value]) => form.append(key, String(value)));
+  form.append('file', new Blob([bytes], { type }), name);
+  const res = await fetch(API + 'patient-attachments', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form });
+  const json = await res.json().catch(() => ({}));
+  return { status: res.status, data: json.data, errors: json.errors, message: json.message };
+};
+const download = (token, id) => fetch(API + `patient-attachment/${id}`, { headers: { Authorization: 'Bearer ' + token } });
+/** A 1x1 PNG. */
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
 // ---------------------------------------------------------------------------
 section('Sign-in');
@@ -128,6 +143,10 @@ const writes = [
   ['update-doctor-password', { id: 1, password: PASSWORD, password_confirmation: PASSWORD }],
   ['doctor-schedule', { doctor_id: 1, clinic_id: nasr.id, slot_minutes: 20, hours: [] }],
   ['doctor-schedule-day', { doctor_id: 1, clinic_id: nasr.id, date: day(1), closed: true }],
+  ['patient-medical', { patient_id: 1, chronic: [], allergies: [], medications: [] }],
+  ['delete-patient-attachment', { id: 1 }],
+  ['doctor-payout', { doctor_id: 1, amount: 1 }],
+  ['mark-reminded', { id: someVisit.id }],
 ];
 const writeResults = await Promise.all(writes.map(([path, body]) => post(path, P, body)));
 check(`every write inside a group -> 403 (${writes.length} routes)`, writeResults.every((r) => r.status === 403), writes.filter((_, i) => writeResults[i].status !== 403).map(([p]) => p).join());
@@ -321,6 +340,83 @@ check('other hours for one date', other.status === 200 && other.data.source === 
 const reset = await post('reset-doctor-schedule-day', R, { doctor_id: karimId, clinic_id: nasr.id, date: freeDay });
 check('back to the weekly hours', reset.data?.source === 'weekly' && reset.data.slots.length === 12);
 
+section('Medical file');
+const M = (await login('mona@mssm.test')).api_token;
+const malak = groupPatients.find((p) => p.name === 'ملك حسن');
+const malakFile = await get(`patient-medical/${malak.id}`, M);
+check("any of the group's doctors reads the whole history", malakFile.status === 200 && new Set(malakFile.data.visits.map((v) => v.doctor_id)).size >= 2 && malakFile.data.visits.some((v) => v.Diagnosis), JSON.stringify(malakFile.message));
+check('...with diagnoses but no money', malakFile.data?.visits.every((v) => !('paid' in v) && !('doctor_prectange' in v) && !('price' in v)));
+const youssef = groupPatients.find((p) => p.name === 'يوسف إبراهيم');
+const youssefFile = (await get(`patient-medical/${youssef.id}`, K)).data;
+check("the seed's background", youssefFile?.medical.allergies.join() === 'بنسلين' && youssefFile.medical.chronic.length === 2 && youssefFile.medical.updated_by === 'د. كريم حسن');
+check('the front desk never sees it', (await get(`patient-medical/${youssef.id}`, R)).status === 403 && (await get('list-patients', R)).data.every((p) => !('medical' in p)) && !('medical' in (await get(`show-patients/${youssef.id}`, R)).data));
+check('the owner and the platform read it', 'medical' in (await get(`show-patients/${youssef.id}`, O)).data && (await get(`patient-medical/${youssef.id}`, P)).status === 200);
+check("another group can't", (await get(`patient-medical/${youssef.id}`, S)).status === 404);
+const background = await post('patient-medical', K, { patient_id: pat.data.id, chronic: ['سكر', ' سكر ', ''], allergies: ['بنسلين'], medications: ['جلوكوفاج 500'], notes: 'تجربة' });
+check('a doctor writes the background, cleaned up', background.status === 200 && background.data.chronic.join() === 'سكر' && background.data.updated_by === 'د. كريم حسن', background.message);
+check("the desk can't write it", (await post('patient-medical', R, { patient_id: pat.data.id, chronic: [], allergies: [], medications: [] })).status === 403);
+const lab = await upload(K, { patient_id: pat.data.id, kind: 'lab', title: 'صورة دم' }, PNG, 'تحليل.png', 'image/png');
+check('a doctor attaches a file', lab.status === 200 && lab.data.file_name === 'تحليل.png' && lab.data.uploaded_by_name === 'د. كريم حسن' && !('file_id' in lab.data), JSON.stringify(lab.message ?? lab.errors));
+const opened = await download(K, lab.data?.id);
+check('...and opens it', opened.status === 200 && opened.headers.get('content-type') === 'image/png' && (await opened.arrayBuffer()).byteLength === PNG.length);
+check("the desk can't open it", (await download(R, lab.data?.id)).status === 403);
+check('only images and PDFs', (await upload(K, { patient_id: pat.data.id, kind: 'other' }, Buffer.from('hello'), 'notes.txt', 'text/plain')).errors?.file !== undefined);
+check('the file shows in the medical file', (await get(`patient-medical/${pat.data.id}`, D)).data?.attachments.map((a) => a.id).join() === String(lab.data?.id));
+check("another doctor can't delete it", (await post('delete-patient-attachment', D, { id: lab.data?.id })).status === 403);
+const scan = await upload(D, { patient_id: pat.data.id, kind: 'radiology', reservation_id: atNasr.data.id }, PNG, 'xray.png', 'image/png');
+check('attached during a visit', scan.data?.reservation_id === atNasr.data.id);
+check('the doctor who added it deletes it', (await post('delete-patient-attachment', D, { id: scan.data?.id })).status === 200);
+
+section('No-shows');
+const deskPatients = (await get('list-patients', R)).data;
+check("the seed's no-shows count on the patient", deskPatients.find((p) => p.name === 'زياد أشرف')?.no_shows === 2);
+const notCome = await post('clinic/edit-reservation', R, { id: atNasr2.data.id, status: 'لم يحضر' });
+check("the desk marks today's booking as a no-show", notCome.data?.status === 'لم يحضر' && notCome.data.queue_state === 'no_show', notCome.message);
+check("a patient who arrived isn't a no-show", (await post('clinic/edit-reservation', O, { id: atTmp.data.id, status: 'لم يحضر' })).errors?.status !== undefined);
+const tomorrowSlot = (await get(`doctor-slots?doctor_id=${karimId}&clinic_id=${nasr.id}&date=${freeDay}`, R)).data.slots.find((s) => s.state === 'free');
+const laterDay = await post('clinic/add-reservation', R, { ...booking, time: tomorrowSlot.time });
+check("a later day can't be a no-show", (await post('clinic/edit-reservation', R, { id: laterDay.data.id, status: 'لم يحضر' })).errors?.status !== undefined);
+await post('delete-reservation', O, { id: laterDay.data.id });
+check("a new booking can't be one", (await post('clinic/add-reservation', R, { ...booking, time: tomorrowSlot.time, status: 'لم يحضر' })).errors?.status !== undefined);
+const missed = await post('clinic/add-reservation', O, { patient_id: pat.data.id, doctor_id: doc.data.id, service_id: svc.data.id, clinic_id: nasr.id, date: day(-2), time: '12:00', booking_type: 'booked', override_hours: true });
+check('a booking whose day passed without the patient becomes a no-show by itself', missed.data?.status === 'لم يحضر' && missed.data.queue_state === 'no_show', JSON.stringify(missed.data?.status ?? missed.message));
+check("a no-show can't take a payment", (await post('clinic/add-payment', O, { id: missed.data.id, amount: 10, method: 'cash' })).status === 400);
+check('it counts on the patient and in the medical file', (await get(`show-patients/${pat.data.id}`, R)).data.no_shows === 1 && (await get(`patient-medical/${pat.data.id}`, K)).data.no_shows === 1);
+
+section("The day's cash");
+const cashBefore = (await get('cash-report', R)).data;
+check("the desk sees its own branch's day", cashBefore?.date === day(0) && cashBefore.payments.every((p) => p.clinicName === 'فرع مدينة نصر'));
+const cashSlot = (await get(`doctor-slots?doctor_id=${doc.data.id}&clinic_id=${nasr.id}&date=${day(0)}`, R)).data.slots.filter((s) => s.state === 'free').pop();
+const paidVisit = await post('clinic/add-reservation', R, { patient_id: pat.data.id, doctor_id: doc.data.id, service_id: svc.data.id, time: cashSlot?.time, paid: 120, payment_method: 'cash' });
+const cashAfter = (await get('cash-report', R)).data;
+const cashOf = (report) => report.by_method.find((m) => m.method === 'cash').amount;
+check('a payment counts on the day it is taken, by method', paidVisit.status === 200 && round2(cashAfter.total - cashBefore.total) === 120 && round2(cashOf(cashAfter) - cashOf(cashBefore)) === 120, paidVisit.message);
+check('...and by who took it', cashAfter.by_staff.some((s) => s.name === 'سلمى عبد الله' && s.role === 'receptionist' && s.cash >= 120));
+check("another branch's cash isn't the desk's", (await get(`cash-report?clinic_id=${maadi.id}&`, R)).data.count === 0);
+check('the owner sees one branch or all', (await get(`cash-report?clinic_id=${nasr.id}&`, O)).data.total === cashAfter.total && (await get('cash-report', O)).data.total >= cashAfter.total);
+check("a doctor doesn't", (await get('cash-report', K)).status === 403);
+
+section('Reminders');
+const tomorrowVisits = (await get(`list-reservations?start_date=${day(1)}&end_date=${day(1)}&`, R)).data;
+check("visits carry the patient's phone", tomorrowVisits.length > 0 && tomorrowVisits.every((v) => /^01\d{9}$/.test(v.patientPhone)), JSON.stringify(tomorrowVisits.map((v) => v.patientPhone)));
+const reminded = await post('mark-reminded', R, { id: tomorrowVisits[0]?.id });
+check('the desk marks a reminder as sent', !!reminded.data?.reminded_at, reminded.message);
+check("a doctor can't", (await post('mark-reminded', K, { id: tomorrowVisits[0]?.id })).status === 403);
+
+section("Doctors' statements");
+const statement = (await get(`doctor-statement?doctor_id=${karimId}&`, O)).data;
+check('this month by default: opening + share - paid out = closing', statement?.start === `${day(0).slice(0, 8)}01` && round2(statement.opening + statement.share - statement.paid_out) === statement.closing, JSON.stringify(statement && { o: statement.opening, s: statement.share, p: statement.paid_out, c: statement.closing }));
+check("each visit's share is its percentage of what was paid", statement.visits.length > 0 && statement.visits.every((v) => round2((v.paid * v.prectange) / 100) === v.share) && round2(statement.visits.reduce((t, v) => t + v.share, 0)) === statement.share);
+const allTime = (await get(`doctor-statement?doctor_id=${karimId}&start=2000-01-01&end=${day(0)}`, O)).data;
+check("the seed's payouts", allTime?.opening === 0 && allTime.paid_out === 2000 && allTime.payouts.length === 2);
+const payout = await post('doctor-payout', O, { doctor_id: karimId, amount: 300, note: 'تجربة' });
+check('the owner records a payout; what the doctor is owed drops by it', payout.status === 200 && round2(statement.closing - (await get(`doctor-statement?doctor_id=${karimId}&`, O)).data.closing) === 300, payout.message);
+const monaId = ownDoctors.find((d) => d.email === 'mona@mssm.test').id;
+check('a doctor sees only their own statement', (await get(`doctor-statement?doctor_id=${monaId}&`, K)).data?.doctor.id === karimId);
+check("the desk can't see statements; only the owner records payouts", (await get(`doctor-statement?doctor_id=${karimId}&`, R)).status === 403 && (await post('doctor-payout', K, { doctor_id: karimId, amount: 1 })).status === 403);
+check("another group's doctor -> 404", (await get(`doctor-statement?doctor_id=${karimId}&`, S)).status === 404);
+check('deleting the payout', (await post('delete-doctor-payout', O, { id: payout.data?.id })).status === 200 && (await get(`doctor-statement?doctor_id=${karimId}&`, O)).data.closing === statement.closing);
+
 section('Re-visit rule across branches');
 const settings = (await get('clinic/settings', O)).data;
 check('the group has one rule', settings.followup.enabled === true && settings.followup.days === 14);
@@ -361,6 +457,7 @@ check('owner deletes the visits', mine.length >= 6 && deletes.every((r) => r.sta
 check('deletes the doctor', (await post('delete-doctors', O, { id: doc.data.id })).status === 200);
 check('deletes the receptionist', (await post('delete-receptionist', O, { id: desk.data.id })).status === 200);
 check('deletes the patient', (await post('delete-patient', O, { id: pat.data.id })).status === 200);
+check("the patient's files go with them", (await download(O, lab.data?.id)).status === 404);
 check('deletes the empty branch', (await post('delete-clinic', O, { id: tmpBranch.data.id })).status === 200);
 check('deletes the lists', (await post('delete-providers', O, { id: prov.data.id })).status === 200 && (await post('delete-specialties', O, { id: spec.data.id })).status === 200);
 check('deleted accounts cannot sign in', (await post('login', null, { email: 'tmp-doc@mssm.test', password: PASSWORD })).status === 401 && (await post('login', null, { email: 'tmp-desk@mssm.test', password: 'Desk@2026' })).status === 401);

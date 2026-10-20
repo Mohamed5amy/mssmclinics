@@ -7,6 +7,7 @@ import { LookupsService } from '../../database/lookups.service';
 import { ScopeService } from '../../database/scope.service';
 import { Clinic } from '../clinics/clinic.schema';
 import { Provider } from '../providers/provider.schema';
+import { MedicalService } from '../medical/medical.service';
 import { ReservationsService } from '../reservations/reservations.service';
 import { CreatePatientDto, UpdatePatientDto } from './dto/patient.dto';
 import { Patient } from './patient.schema';
@@ -22,21 +23,27 @@ export class PatientsService {
     private readonly lookups: LookupsService,
     private readonly scope: ScopeService,
     private readonly reservations: ReservationsService,
+    private readonly medical: MedicalService,
   ) {}
 
   /**
-   * Adds `groupName`, the registering branch (`clinicName`, `clinicBranch`) and
-   * `providerName`, which the patient pages render.
+   * Adds `groupName`, the registering branch (`clinicName`, `clinicBranch`),
+   * `providerName`, which the patient pages render, and `no_shows`, how many
+   * times the patient didn't come. The front desk doesn't get the medical
+   * background.
    */
-  private async decorate(rows: Patient[]) {
-    const [groups, clinics, providers] = await Promise.all([
+  private async decorate(rows: Patient[], user: AuthUser) {
+    const [groups, clinics, providers, noShows] = await Promise.all([
       this.lookups.groupsById(),
       this.lookups.clinicsById(),
       this.lookups.providersById(),
+      this.reservations.noShowCounts(this.scope.groupFilter(user)),
     ]);
 
-    return rows.map((row) => ({
+    return rows.map(({ medical, ...row }) => ({
       ...row,
+      ...(user.role === 'receptionist' ? {} : { medical }),
+      no_shows: noShows.get(row.id) ?? 0,
       groupName: groups.get(row.group_id)?.name ?? '',
       clinicName: clinics.get(row.registered_clinic_id)?.name ?? '',
       clinicBranch: clinics.get(row.registered_clinic_id)?.branch ?? '',
@@ -44,10 +51,15 @@ export class PatientsService {
     }));
   }
 
+  /** A saved patient as the account may see it: the front desk without the medical background. */
+  private forDesk<T extends { medical?: unknown }>({ medical, ...row }: T, user: AuthUser) {
+    return user.role === 'receptionist' ? row : { ...row, medical };
+  }
+
   /** `groupId` is the platform owner's group filter. */
   async findAll(user: AuthUser, groupId?: number) {
     const filter = this.scope.groupFilter(user, groupId);
-    return this.decorate(await this.model.find(filter).sort({ id: 1 }).lean());
+    return this.decorate(await this.model.find(filter).sort({ id: 1 }).lean(), user);
   }
 
   private async findScoped(id: number, user: AuthUser) {
@@ -60,7 +72,7 @@ export class PatientsService {
 
   /** The file, with the visits the account may see (a receptionist: its own branch's). */
   async findOne(id: number, user: AuthUser) {
-    const [decorated] = await this.decorate([await this.findScoped(id, user)]);
+    const [decorated] = await this.decorate([await this.findScoped(id, user)], user);
     return { ...decorated, reservations: await this.reservations.findForPatient(id, user) };
   }
 
@@ -89,7 +101,7 @@ export class PatientsService {
       registered_clinic_id: await this.registeringClinic(user, clinic_id),
       id: await this.counters.next('patient'),
     });
-    return created.toJSON();
+    return this.forDesk(created.toJSON(), user);
   }
 
   async update({ id, ...changes }: UpdatePatientDto, user: AuthUser) {
@@ -100,12 +112,14 @@ export class PatientsService {
     }
 
     const updated = await this.model.findOneAndUpdate({ id }, { $set: changes }, { new: true });
-    return updated.toJSON();
+    return this.forDesk(updated.toJSON(), user);
   }
 
+  /** The patient's attached files go too; past visits stay with their snapshots. */
   async remove(id: number, user: AuthUser) {
     await this.findScoped(id, user);
     await this.model.deleteOne({ id });
+    await this.medical.forget({ patient_id: id });
     return { id };
   }
 }
