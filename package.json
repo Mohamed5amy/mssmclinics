@@ -10,35 +10,28 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@emotion/cache": "^11.11.0",
-    "@emotion/react": "^11.11.3",
-    "@emotion/styled": "^11.11.0",
-    "@mui/icons-material": "^5.14.8",
-    "@mui/material": "^5.14.8",
-    "@reduxjs/toolkit": "^2.1.0",
+    "@fontsource/ibm-plex-sans-arabic": "^5.1.0",
+    "@headlessui/react": "^2.2.0",
     "axios": "^1.5.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.460.0",
     "react": "^18.2.0",
     "react-auth-kit": "^2.12.7",
-    "react-csv": "^2.2.2",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.46.1",
-    "react-lottie": "^1.2.4",
-    "react-redux": "^9.1.0",
-    "react-router-dom": "^6.15.0",
-    "react-toastify": "^10.0.5",
-    "sass": "^1.66.1",
-    "stylis": "^4.3.1",
-    "stylis-plugin-rtl": "^2.1.1",
-    "tsparticles-slim": "^2.12.0"
+    "react-router-dom": "^6.15.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
     "@vitejs/plugin-react": "^4.0.3",
+    "autoprefixer": "^10.4.20",
     "eslint": "^8.45.0",
     "eslint-plugin-react": "^7.32.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.3",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
     "vite": "^4.4.5"
   }
 }

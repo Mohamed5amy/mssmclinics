@@ -1,222 +1,205 @@
-import { CircularProgress, Grid, IconButton, Stack, TextField, Typography } from "@mui/material";
-import Container from "../../components/Container/Container";
-import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
-import SummarizeIcon from "@mui/icons-material/Summarize";
-import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
-import { useEffect, useState } from "react";
-import axios from "axios";
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import PaidIcon from '@mui/icons-material/Paid';
-import { Link } from "react-router-dom";
-import CheckIcon from '@mui/icons-material/Check';
-import CloseIcon from '@mui/icons-material/Close';
-import HourglassBottomIcon from '@mui/icons-material/HourglassBottom';
-import MedicalInformationIcon from '@mui/icons-material/MedicalInformation';
-import CategoryIcon from '@mui/icons-material/Category';
+import { useMemo, useState } from "react";
+import { Banknote, CalendarCheck, CalendarX, Clock, Coins, HandCoins, Hospital, Stethoscope, Headset, Users, Wallet } from "lucide-react";
+import { Card, CardHeader, DataTable, Input, PageHeader, Select, StatCard } from "../../ui";
+import { useApi } from "../../lib/useApi";
+import { currentUser } from "../../constants/session";
+import { PAYMENT_METHODS, STATUS, amount, dayString, monthRange, money, isAway } from "../../constants/visits";
 
+const PERIODS = [
+    { id: "month", name: "هذا الشهر" },
+    { id: "last", name: "الشهر الماضي" },
+    { id: "today", name: "اليوم" },
+    { id: "custom", name: "فترة مخصصة" },
+];
 
+const periodRange = (period, custom) => {
+    const now = new Date();
+    if (period === "today") return { start: dayString(now), end: dayString(now) };
+    if (period === "last") return monthRange(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    if (period === "custom") return custom;
+    return monthRange(now);
+};
 
+const round = (value) => Math.round(value * 100) / 100;
 
+// Groups visits by a key and adds up visits, collected money and doctor shares.
+const breakdown = (visits, keyOf, nameOf) => {
+    const groups = new Map();
+    visits.forEach((visit) => {
+        const key = keyOf(visit);
+        const row = groups.get(key) ?? { id: key, name: nameOf(visit), visits: 0, collected: 0, share: 0 };
+        row.visits += 1;
+        row.collected += visit.paid || 0;
+        row.share += ((visit.paid || 0) * (visit.doctor?.prectange || 0)) / 100;
+        groups.set(key, row);
+    });
+    return [...groups.values()].sort((a, b) => b.collected - a.collected);
+};
+
+// The owner's (or the platform's) figures for a period: money first, then visits.
 const Insights = () => {
+    const user = currentUser();
+    const platform = user.role === "admin";
 
-  const [loading, setLoading] = useState(false)
+    const [groupId, setGroupId] = useState("");
+    const [clinicId, setClinicId] = useState("");
+    const [period, setPeriod] = useState("month");
+    const [custom, setCustom] = useState(monthRange());
+    const range = periodRange(period, custom);
+    const scope = { group_id: groupId, clinic_id: clinicId };
 
-  const [nums, setNums] = useState(null)
-  const date = new Date()
+    const groups = useApi(platform ? "list-groups" : null);
+    const branches = useApi("list-clinic", { group_id: groupId });
+    const counts = useApi("home", scope);
+    const visits = useApi("list-reservations", { ...scope, start_date: range.start, end_date: range.end });
 
-  const myStartDate = `${date.getFullYear()}-${date.getMonth() + 1 >= 10 ? date.getMonth() + 1 : "0" + (date.getMonth() + 1)}-01`
-  const myEndDate = `${date.getFullYear()}-${date.getMonth() + 1 >= 10 ? date.getMonth() + 1 : "0" + (date.getMonth() + 1)}-${getLastDayOfMonth(date.getFullYear() , date.getMonth())}`
-  
-  const [startDate, setStartDate] = useState(myStartDate)
-  const [endDate, setEndDate] = useState(myEndDate)
+    const figures = useMemo(() => {
+        const all = visits.data ?? [];
+        const counted = all.filter((visit) => !isAway(visit.status));
+        const collected = counted.reduce((sum, visit) => sum + (visit.paid || 0), 0);
+        const shares = counted.reduce((sum, visit) => sum + ((visit.paid || 0) * (visit.doctor?.prectange || 0)) / 100, 0);
+        const methods = {};
+        counted.forEach((visit) => (visit.payments || []).forEach((payment) => {
+            methods[payment.method] = (methods[payment.method] || 0) + payment.amount;
+        }));
+        return {
+            total: all.length,
+            done: all.filter((visit) => visit.status === STATUS.DONE).length,
+            canceled: all.filter((visit) => visit.status === STATUS.CANCELED).length,
+            pending: all.filter((visit) => visit.status === STATUS.PENDING).length,
+            collected: round(collected),
+            shares: round(shares),
+            owed: round(counted.reduce((sum, visit) => sum + Math.max(visit.remaining || 0, 0), 0)),
+            discounts: round(counted.reduce((sum, visit) => sum + (visit.discount || 0), 0)),
+            methods,
+            byDoctor: breakdown(counted, (visit) => visit.doctor_id, (visit) => visit.doctorName),
+            byBranch: breakdown(counted, (visit) => visit.clinic_id, (visit) => visit.clinicName + (platform ? ` · ${visit.groupName}` : "")),
+        };
+    }, [visits.data, platform]);
 
-  const [dateText, setDateText] = useState(true)
+    const loading = visits.loading;
+    const methodTotal = Object.values(figures.methods).reduce((sum, value) => sum + value, 0);
+    const scopeName = platform
+        ? groupId ? groups.data?.find((group) => group.id === +groupId)?.name : "كل المجموعات"
+        : user.groupName;
 
-  function getLastDayOfMonth(year, month) {
-    const date = new Date(year, month + 1, 0);
-    return date.getDate();
-  }
+    return (
+        <>
+            <PageHeader
+                title="لوحة التحكم"
+                subtitle={scopeName}
+                actions={
+                    <>
+                        {platform && (
+                            <Select value={groupId} onChange={(e) => { setGroupId(e.target.value); setClinicId(""); }} className="w-auto min-w-40">
+                                <option value="">كل المجموعات</option>
+                                {groups.data?.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                            </Select>
+                        )}
+                        {(branches.data?.length ?? 0) > 1 && (
+                            <Select value={clinicId} onChange={(e) => setClinicId(e.target.value)} className="w-auto min-w-36">
+                                <option value="">كل الفروع</option>
+                                {branches.data.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                            </Select>
+                        )}
+                        <Select value={period} onChange={(e) => setPeriod(e.target.value)} className="w-auto">
+                            {PERIODS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                        </Select>
+                    </>
+                }
+            />
 
+            {period === "custom" && (
+                <div className="mb-6 flex flex-wrap items-center gap-3">
+                    <Input type="date" value={custom.start} onChange={(e) => setCustom({ ...custom, start: e.target.value })} className="w-auto" />
+                    <span className="text-sm text-slate-400">إلى</span>
+                    <Input type="date" value={custom.end} onChange={(e) => setCustom({ ...custom, end: e.target.value })} className="w-auto" />
+                </div>
+            )}
 
-  useEffect(() => {
-      axios
-          .get(import.meta.env.VITE_API + "home", {
-              headers: {
-                  Authorization: "Bearer " + localStorage.getItem("token"),
-              },
-          })
-          .then((res) => {
-              console.log(res.data.data);
-              setNums(res.data.data);
-          })
-          .catch((err) => {
-              console.log(err);
-          })
-  }, []);
+            {/* Money */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard label="المحصّل" value={money(figures.collected)} icon={Wallet} tone="blue" loading={loading} hint="المدفوع فعلياً، بدون الملغي" />
+                <StatCard label="صافي العيادة" value={money(figures.collected - figures.shares)} icon={Banknote} tone="green" loading={loading} hint="بعد نسب الدكاترة" />
+                <StatCard label="نسب الدكاترة" value={money(figures.shares)} icon={HandCoins} tone="violet" loading={loading} />
+                <StatCard label="متبقي على المرضى" value={money(figures.owed)} icon={Coins} tone="amber" loading={loading} hint={figures.discounts ? `الخصومات: ${money(figures.discounts)}` : undefined} />
+            </div>
 
-  
-  const [clients, setClients] = useState([])
-  
-  useEffect(() => {
+            {/* Visits */}
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard label="الكشوفات" value={figures.total} icon={CalendarCheck} tone="gray" loading={loading} />
+                <StatCard label="مكتملة" value={figures.done} icon={CalendarCheck} tone="green" loading={loading} />
+                <StatCard label="في الانتظار" value={figures.pending} icon={Clock} tone="amber" loading={loading} />
+                <StatCard label="ملغاة" value={figures.canceled} icon={CalendarX} tone="red" loading={loading} />
+            </div>
 
-    setLoading(true)
-    
-    axios.get(import.meta.env.VITE_API + "list-reservations?" + 
-    `${"start_date=" + (startDate ? startDate : myStartDate) + "&"}${"end_date=" + (endDate ? endDate :myEndDate) + "&"}`,
-    {
-      headers : {
-        Authorization : "Bearer " + localStorage.getItem("token")
-      }
-    })
-    .then((res) => {
-      console.log(res.data.data)
-      setClients(res?.data?.data.reverse())
-    })
-    .catch((err) => {
-      console.log(err)
-    })
-    .finally(() => setLoading(false))
-  } , [myStartDate , myEndDate , startDate , endDate])
+            <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+                {/* By doctor */}
+                <Card className="lg:col-span-2">
+                    <CardHeader title="حسب الطبيب" description="الكشوفات غير الملغاة في الفترة" />
+                    <DataTable
+                        loading={loading}
+                        rows={figures.byDoctor}
+                        empty="لا توجد كشوفات في الفترة دي"
+                        columns={[
+                            { key: "name", header: "الطبيب", render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
+                            { key: "visits", header: "الكشوفات" },
+                            { key: "collected", header: "المحصّل", render: (row) => money(row.collected) },
+                            { key: "share", header: "نسبته", render: (row) => money(row.share) },
+                        ]}
+                    />
+                </Card>
 
+                {/* By payment method */}
+                <Card>
+                    <CardHeader title="طرق الدفع" />
+                    <div className="space-y-4 p-5">
+                        {PAYMENT_METHODS.map((method) => {
+                            const value = figures.methods[method.id] || 0;
+                            const share = methodTotal ? Math.round((value / methodTotal) * 100) : 0;
+                            return (
+                                <div key={method.id}>
+                                    <div className="mb-1.5 flex justify-between text-sm">
+                                        <span className="font-medium text-slate-700">{method.name}</span>
+                                        <span className="text-slate-500">{amount(value)} <span className="text-xs">({share}%)</span></span>
+                                    </div>
+                                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                                        <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${share}%` }} />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {!methodTotal && !loading && <p className="text-center text-sm text-slate-400">لا توجد مدفوعات</p>}
+                    </div>
+                </Card>
+            </div>
 
-    // cumulative
-    const [cum, setCum] = useState(0)
-    const [cumD, setCumD] = useState(0)
-  
-    useEffect(() => {
+            {/* By branch, when there is more than one */}
+            {!clinicId && figures.byBranch.length > 1 && (
+                <Card className="mt-6">
+                    <CardHeader title="حسب الفرع" />
+                    <DataTable
+                        rows={figures.byBranch}
+                        columns={[
+                            { key: "name", header: "الفرع", render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
+                            { key: "visits", header: "الكشوفات" },
+                            { key: "collected", header: "المحصّل", render: (row) => money(row.collected) },
+                            { key: "net", header: "صافي العيادة", render: (row) => money(row.collected - row.share) },
+                        ]}
+                    />
+                </Card>
+            )}
 
-      setCum(0)
-      clients.map(item => item.status == "مكتمل" && setCum(prev => prev + item.price))
-  
-      setCumD(0)
-      clients.map(item => item.status == "مكتمل" && setCumD(prev => prev + (item.price * item.doctor?.prectange / 100 )))
-      
-    } , [clients])
-  
-  return (
-    <Container>
-      <Typography fontSize={18} fontWeight={600} color={"text.secondary"} mb={8}> اعداد العيادة </Typography>
-      <Grid container spacing={12} mb={24}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
-            <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> الدكاترة </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {nums?.doctors_count}  </Typography>
-            </Stack>
-            <Link to={"/doctors-list"}><IconButton sx={{color : "#11CAF2"}}> <SupervisorAccountIcon sx={{fontSize : 50}} /> </IconButton></Link>
-          </Stack>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
-            <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> المرضي </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {nums?.patients_count}  </Typography>
-            </Stack>
-            <Link to={"/patients-list"} ><IconButton sx={{color : "#594BFA"}}> <MedicalServicesIcon sx={{fontSize : 50}} /> </IconButton></Link>
-          </Stack>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
-            <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> التخصصات </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {nums?.specialties_count}  </Typography>
-            </Stack>
-            <Link to={"/settings"}><IconButton sx={{color : "purple"}}> <CategoryIcon sx={{fontSize : 50}} /> </IconButton></Link>
-          </Stack>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
-            <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> الخدمات </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {nums?.services_count}  </Typography>
-            </Stack>
-            <Link to={"/settings"} ><IconButton sx={{color : "#C2C2C2"}}> <MedicalInformationIcon sx={{fontSize : 50}} /> </IconButton></Link>
-          </Stack>
-        </Grid>
-      </Grid>
-      <Typography fontSize={18} fontWeight={600} color={"text.secondary"} mb={8} mt={16}> يمكنك فلترة جميع الإحصائيات التالية بالفترة الزمنية <br /> <span style={{fontSize : 14}}>(يتم عرض احصائيات الشهر الحالي افتراضيا فى حالة عدم تحديد مدة)</span> </Typography>
-      <Grid container spacing={12} mb={24}>
-        <Grid item xs={12} sm={6}>
-          <Typography mb={2} color={"text.secondary"} > من</Typography>
-          <TextField type="date" value={startDate} onChange={e => {setStartDate(e.target.value) ; dateText && setDateText(false) }} fullWidth />
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <Typography mb={2} color={"text.secondary"} > حتي</Typography>
-          <TextField type="date" value={endDate} onChange={e => {setEndDate(e.target.value) ; dateText && setDateText(false) }} fullWidth />
-        </Grid>
-      </Grid>
-      <Typography fontSize={18} fontWeight={600} color={"text.secondary"} mb={8} mt={16}> الكشوفات <br /> <span style={{fontSize : 14}}> من ({startDate}) حتي ({endDate}) </span> </Typography>
-      <Grid container spacing={12} mb={24}>
-        <Grid item xs={12} sm={6}>
-          <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
-            <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> عدد الكشوفات الكلي </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {loading ? <CircularProgress size={30} /> : clients?.length} </Typography>
-            </Stack>
-            <Link to={"/reservations-list"} ><IconButton sx={{color : "gray"}} > <SummarizeIcon sx={{fontSize : 50}} /> </IconButton></Link>
-          </Stack>
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
-            <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> عدد الكشوفات المكتملة </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {loading ? <CircularProgress size={30} /> : clients?.filter(item => item.status == "مكتمل").length}  </Typography>
-            </Stack>
-            <IconButton sx={{color : "#32C652"}}> <CheckIcon sx={{fontSize : 50}} /> </IconButton>
-          </Stack>
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
-            <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> عدد الكشوفات الملغاة </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {loading ? <CircularProgress size={30} /> : clients?.filter(item => item.status == "ملغي").length}  </Typography>
-            </Stack>
-            <IconButton sx={{color : "red"}}> <CloseIcon sx={{fontSize : 50}} /> </IconButton>
-          </Stack>
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
-            <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> عدد الكشوفات المنتظرة </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {loading ? <CircularProgress size={30} /> : clients?.filter(item => item.status == "فى الانتظار").length} </Typography>
-            </Stack>
-            <IconButton sx={{color : "orange"}} > <HourglassBottomIcon sx={{fontSize : 50}} /> </IconButton>
-          </Stack>
-        </Grid>
-      </Grid>
-      <Typography fontSize={18} fontWeight={600} color={"text.secondary"} mb={8} mt={16}> دخل العيادة <br /> <span style={{fontSize : 14}}>(جميع الحسابات تتم للكشوفات المكتملة فقط)</span> <br /> <span style={{fontSize : 14}}> من ({startDate}) حتي ({endDate}) </span> </Typography>
-      <Grid container spacing={12} mb={24}>
-        <Grid item xs={12} sm={6} md={4}>
-          <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
-            <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> الدخل الكلي </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {loading ? <CircularProgress size={30} /> :cum}  </Typography>
-            </Stack>
-            <IconButton sx={{color : "#FAEF13"}}> <AccountBalanceWalletIcon sx={{fontSize : 50}} /> </IconButton>
-          </Stack>
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
-          <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
-            <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> دخل الدكاترة </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {loading ? <CircularProgress size={30} /> :cumD}  </Typography>
-            </Stack>
-            <IconButton sx={{color : "#515DAA"}}> <AttachMoneyIcon sx={{fontSize : 50}} /> </IconButton>
-          </Stack>
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
-          <Stack border={"1px solid"} borderColor={"#D9DFEC"} p={6} direction={"row"} justifyContent={"space-between"} borderRadius={"12px"} alignItems={"start"} >
-            <Stack>
-              <Typography fontWeight={500} color={"primary.icons"} fontSize={20} mb={2}> دخل العيادة </Typography>
-              <Typography fontWeight={500} color={"text"} fontSize={32} > {loading ? <CircularProgress size={30} /> :cum - cumD} </Typography>
-            </Stack>
-            <IconButton sx={{color : "#32C652"}} > <PaidIcon sx={{fontSize : 50}} /> </IconButton>
-          </Stack>
-        </Grid>
-      </Grid>
-    </Container>
-  )
-}
+            {/* Size */}
+            <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                {platform && !groupId && <StatCard label="المجموعات" value={counts.data?.groups_count} icon={Hospital} tone="gray" loading={counts.loading} />}
+                {!clinicId && <StatCard label="الفروع" value={counts.data?.clinics_count} icon={Hospital} tone="gray" loading={counts.loading} />}
+                <StatCard label="الدكاترة" value={counts.data?.doctors_count} icon={Stethoscope} tone="gray" loading={counts.loading} />
+                <StatCard label="الاستقبال" value={counts.data?.receptionists_count} icon={Headset} tone="gray" loading={counts.loading} />
+                <StatCard label="المرضى" value={counts.data?.patients_count} icon={Users} tone="gray" loading={counts.loading} />
+            </div>
+        </>
+    );
+};
 
-export default Insights
+export default Insights;
