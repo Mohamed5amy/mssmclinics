@@ -34,6 +34,8 @@ const clean = (params = {}) =>
 
 export const get = (url, params) => api.get(url, { params: clean(params) }).then((res) => res.data.data);
 export const post = (url, body) => api.post(url, body).then((res) => res.data.data);
+// A file the API streams (an attachment), as a Blob
+export const getFile = (url) => api.get(url, { responseType: "blob" }).then((res) => res.data);
 
 // The API's field errors ({ field: ["msg"] }) as { field: "msg" }, in Arabic where we know it
 export const fieldErrors = (error) =>
@@ -66,6 +68,16 @@ const MESSAGES = {
     "Please choose the appointment length": "اختر مدة الكشف",
     "Some booked patients fall outside these hours - move or cancel their visits first":
         "فيه مرضى محجوزين برة المواعيد دي، انقل حجوزاتهم او الغيها الاول",
+    "A new booking can't be a no-show": "مينفعش حجز جديد يبقى لم يحضر",
+    "This patient has arrived": "المريض وصل بالفعل",
+    "A visit on a later day can't be a no-show - cancel it instead": "ميعاد الكشف ده لسه مجاش، الغيه بدل كده",
+    "A no-show can't take a payment": "مينفعش تسجيل دفعة لكشف لم يحضر",
+    "A canceled visit can't take a payment": "مينفعش تسجيل دفعة لكشف ملغي",
+    "Please choose a file": "اختر الملف",
+    "Only images (JPG, PNG, WEBP) and PDF files can be attached": "الملفات المسموحة صور (JPG او PNG او WEBP) او PDF",
+    "File too large": "الملف اكبر من 10 ميجا",
+    "This file was not found": "الملف ده مش موجود",
+    "Only the doctor who added this file, or the owner, can delete it": "الملف ده يحذفه الدكتور اللي ضافه او صاحب المجموعة بس",
 };
 
 const arabic = (message) => MESSAGES[message] ?? message;

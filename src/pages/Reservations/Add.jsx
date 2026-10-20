@@ -44,6 +44,8 @@ const Add = () => {
     const branchId = pickBranch ? clinicId : user.clinic_ids?.[0];
 
     const patients = useApi("list-patients");
+    // How many bookings the chosen patient didn't come to
+    const noShows = patients.data?.find((patient) => patient.id === patientId)?.no_shows ?? 0;
     const doctors = useApi(pickBranch && !clinicId ? null : "list-doctors", { clinic_id: clinicId });
     const services = useApi("services");
 
@@ -89,7 +91,8 @@ const Add = () => {
         })
             .then((visit) => {
                 toast.success(`تم الحجز · دور رقم ${visit.queue_number}`);
-                navigate(`/reservations-list/${visit.id}`);
+                // The visit page offers to send the confirmation on WhatsApp
+                navigate(`/reservations-list/${visit.id}`, { state: { booked: true } });
             })
             .catch((err) => {
                 setErrors(fieldErrors(err));
@@ -126,6 +129,11 @@ const Add = () => {
                                     invalid={!!errors.patient_id}
                                     clinicId={clinicId}
                                 />
+                                {noShows > 0 && (
+                                    <Alert tone="warning" icon={AlertTriangle} className="mt-3">
+                                        المريض ده غاب {noShows === 1 ? "مرة" : noShows === 2 ? "مرتين" : `${noShows} مرات`} قبل كده. أكّد معاه الميعاد او خد عربون.
+                                    </Alert>
+                                )}
                             </Field>
                             <Field label="الدكتور" required error={errors.doctor_id}>
                                 <Select value={doctorId} onChange={(e) => { setDoctorId(e.target.value); setTime(""); }} invalid={!!errors.doctor_id} disabled={pickBranch && !clinicId}>

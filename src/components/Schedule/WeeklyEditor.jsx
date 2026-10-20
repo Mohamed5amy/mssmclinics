@@ -4,6 +4,7 @@ import { clsx } from "clsx";
 import { Button, Card, CardBody, CardHeader, Segmented, Switch, useToast } from "../../ui";
 import { errorMessage, post } from "../../lib/api";
 import { DAY_NAMES, SLOT_LENGTHS, WEEK, periodsProblem, slotCount, toMinutes } from "../../lib/hours";
+import { DAYS, counted } from "../../lib/counted";
 import PeriodsEditor from "./PeriodsEditor";
 import StrandedVisits from "./StrandedVisits";
 
@@ -168,7 +169,7 @@ const WeeklyEditor = ({ schedule, canEdit, onSaved }) => {
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-slate-500">
-                        {workingDays ? `${workingDays} أيام في الأسبوع · ${perWeek} كشف` : "الدكتور ملوش مواعيد في الفرع ده"}
+                        {workingDays ? `${counted(workingDays, DAYS)} في الأسبوع · ${perWeek} كشف` : "الدكتور ملوش مواعيد في الفرع ده"}
                     </p>
                     {canEdit && (
                         <Button onClick={save} loading={saving} disabled={!dirty || invalid}>

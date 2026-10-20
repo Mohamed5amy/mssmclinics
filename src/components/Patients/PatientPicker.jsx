@@ -44,7 +44,10 @@ const PatientPicker = ({ patients, value, onChange, onCreated, invalid, clinicId
                 >
                     {shown.map((patient) => (
                         <ComboboxOption key={patient.id} value={patient} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm data-[focus]:bg-brand-50">
-                            <span className="truncate font-medium text-slate-800">{patient.name}</span>
+                            <span className="flex min-w-0 items-center gap-2">
+                                <span className="truncate font-medium text-slate-800">{patient.name}</span>
+                                {patient.no_shows > 0 && <span className="shrink-0 text-xs font-medium text-red-600">غاب {patient.no_shows}</span>}
+                            </span>
                             <span className="ltr-nums text-xs text-slate-500">{patient.phone}</span>
                         </ComboboxOption>
                     ))}

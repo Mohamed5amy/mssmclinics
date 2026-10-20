@@ -3,7 +3,7 @@ import { Banknote, CalendarCheck, CalendarX, Clock, Coins, HandCoins, Hospital, 
 import { Card, CardHeader, DataTable, Input, PageHeader, Select, StatCard } from "../../ui";
 import { useApi } from "../../lib/useApi";
 import { currentUser } from "../../constants/session";
-import { PAYMENT_METHODS, STATUS, amount, dayString, monthRange, money } from "../../constants/visits";
+import { PAYMENT_METHODS, STATUS, amount, dayString, monthRange, money, isAway } from "../../constants/visits";
 
 const PERIODS = [
     { id: "month", name: "هذا الشهر" },
@@ -55,7 +55,7 @@ const Insights = () => {
 
     const figures = useMemo(() => {
         const all = visits.data ?? [];
-        const counted = all.filter((visit) => visit.status !== STATUS.CANCELED);
+        const counted = all.filter((visit) => !isAway(visit.status));
         const collected = counted.reduce((sum, visit) => sum + (visit.paid || 0), 0);
         const shares = counted.reduce((sum, visit) => sum + ((visit.paid || 0) * (visit.doctor?.prectange || 0)) / 100, 0);
         const methods = {};

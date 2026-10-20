@@ -25,6 +25,9 @@ import Reservations_Add from "./pages/Reservations/Add";
 import Reservations_Edit from "./pages/Reservations/Edit";
 import Queue from "./pages/Queue/Queue";
 import Schedules from "./pages/Schedules/Schedules";
+import Cash from "./pages/Cash/Cash";
+import Reminders from "./pages/Reminders/Reminders";
+import Statement from "./pages/Statement/Statement";
 import Settings from "./pages/Settings/Settings";
 
 // Pages only some accounts may open (by the role name the API returns);
@@ -40,6 +43,7 @@ const MANAGEMENT = ["admin", "owner"];
 const DESK = ["owner", "receptionist"];
 const STAFF = ["admin", "owner", "receptionist"];
 const EVERYONE = ["admin", "owner", "receptionist", "doctor"];
+const EARNERS = ["owner", "doctor"];
 
 function App() {
     return (
@@ -91,7 +95,13 @@ function App() {
                                 <Route path="/patients-list/add" element={<Patients_Form />} />
                                 <Route path="/patients-list/edit/:id" element={<Patients_Form />} />
                                 <Route path="/reservations-list/add" element={<Reservations_Add />} />
+                                <Route path="/cash" element={<Cash />} />
+                                <Route path="/reminders" element={<Reminders />} />
                                 <Route path="/reservations-list/edit/:id" element={<Reservations_Edit />} />
+                            </Route>
+
+                            <Route element={<RequireRole roles={EARNERS} />}>
+                                <Route path="/statement" element={<Statement />} />
                             </Route>
 
                             <Route element={<RequireRole roles={EVERYONE} />}>

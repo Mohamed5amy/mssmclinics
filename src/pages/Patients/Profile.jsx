@@ -5,10 +5,13 @@ import { Badge, Button, ButtonLink, Card, CardHeader, ConfirmDialog, DataTable, 
 import { errorMessage, post } from "../../lib/api";
 import { useApi } from "../../lib/useApi";
 import { currentUser } from "../../constants/session";
-import { STATUS, money, visitBadge } from "../../constants/visits";
+import { isAway, money, visitBadge } from "../../constants/visits";
+import Attachments from "../../components/Medical/Attachments";
+import MedicalBackground from "../../components/Medical/MedicalBackground";
 
-// A patient's file: who they are, what they owe, and every visit (within the
-// account's reach - a receptionist sees its own branch's).
+// A patient's file: who they are, what they owe, how often they didn't come,
+// and every visit (within the account's reach - a receptionist sees its own
+// branch's). The owner and the platform also see the medical file.
 const Profile = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -17,11 +20,12 @@ const Profile = () => {
     const desk = role === "owner" || role === "receptionist";
 
     const { data: patient, loading } = useApi(`show-patients/${id}`);
+    const file = useApi(role !== "receptionist" ? `patient-medical/${id}` : null);
     const [confirm, setConfirm] = useState(false);
     const [busy, setBusy] = useState(false);
 
     const totals = useMemo(() => {
-        const visits = (patient?.reservations ?? []).filter((visit) => visit.status !== STATUS.CANCELED);
+        const visits = (patient?.reservations ?? []).filter((visit) => !isAway(visit.status));
         return {
             visits: visits.length,
             paid: visits.reduce((sum, visit) => sum + (visit.paid || 0), 0),
@@ -57,30 +61,50 @@ const Profile = () => {
                 }
             />
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard label="الزيارات" value={totals.visits} />
                 <StatCard label="المدفوع" value={money(totals.paid)} tone="green" />
                 <StatCard label="المتبقي عليه" value={money(totals.owed)} tone={totals.owed > 0 ? "amber" : "gray"} />
+                <StatCard label="مرات الغياب" value={patient.no_shows} tone={patient.no_shows > 0 ? "red" : "gray"} hint={patient.no_shows > 0 ? "حجز وماجاش" : undefined} />
             </div>
 
             <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <Card>
-                    <CardHeader title="البيانات" />
-                    <div className="p-5">
-                        <Details
-                            columns={1}
-                            items={[
-                                { label: "النوع", value: patient.sex },
-                                { label: "السن", value: `${patient.age} سنة` },
-                                { label: "العنوان", value: patient.address },
-                                { label: "عرفنا عن طريق", value: patient.providerName },
-                                { label: "اتسجل في", value: patient.clinicName || "—" },
-                                { label: "عميل من", value: patient.created_at?.slice(0, 10) },
-                                { label: "المجموعة", value: patient.groupName, hidden: role !== "admin" },
-                            ]}
-                        />
-                    </div>
-                </Card>
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader title="البيانات" />
+                        <div className="p-5">
+                            <Details
+                                columns={1}
+                                items={[
+                                    { label: "النوع", value: patient.sex },
+                                    { label: "السن", value: `${patient.age} سنة` },
+                                    { label: "العنوان", value: patient.address },
+                                    { label: "عرفنا عن طريق", value: patient.providerName },
+                                    { label: "اتسجل في", value: patient.clinicName || "—" },
+                                    { label: "عميل من", value: patient.created_at?.slice(0, 10) },
+                                    { label: "المجموعة", value: patient.groupName, hidden: role !== "admin" },
+                                ]}
+                            />
+                        </div>
+                    </Card>
+                    {file.data && (
+                        <>
+                            <MedicalBackground
+                                patientId={+id}
+                                medical={file.data.medical}
+                                canEdit={role === "owner"}
+                                onSaved={(medical) => file.setData((current) => ({ ...current, medical }))}
+                            />
+                            <Attachments
+                                patientId={+id}
+                                items={file.data.attachments}
+                                onChange={(attachments) => file.setData((current) => ({ ...current, attachments }))}
+                                canUpload={role === "owner"}
+                                canDelete={() => role === "owner"}
+                            />
+                        </>
+                    )}
+                </div>
                 <Card className="lg:col-span-2">
                     <CardHeader title="الزيارات" />
                     <DataTable
@@ -106,7 +130,7 @@ const Profile = () => {
                             {
                                 key: "remaining",
                                 header: "المتبقي",
-                                render: (row) => (row.remaining > 0 && row.status !== STATUS.CANCELED ? <span className="font-medium text-amber-700">{money(row.remaining)}</span> : <span className="text-slate-400">—</span>),
+                                render: (row) => (row.remaining > 0 && !isAway(row.status) ? <span className="font-medium text-amber-700">{money(row.remaining)}</span> : <span className="text-slate-400">—</span>),
                             },
                         ]}
                     />

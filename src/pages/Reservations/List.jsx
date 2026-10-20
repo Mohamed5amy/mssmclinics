@@ -4,7 +4,7 @@ import { Badge, Button, ButtonLink, Card, DataTable, Input, PageHeader, Select, 
 import { useApi } from "../../lib/useApi";
 import { downloadCsv } from "../../lib/csv";
 import { currentUser } from "../../constants/session";
-import { STATUS, STATUSES, labelOf, monthRange, money, visitBadge, PAYMENT_METHODS } from "../../constants/visits";
+import { STATUSES, isAway, labelOf, monthRange, money, visitBadge, PAYMENT_METHODS } from "../../constants/visits";
 import { matchesPatient } from "../../lib/search";
 
 // Visits over a period, filtered by branch, doctor and status, with the money
@@ -35,7 +35,7 @@ const List = () => {
     );
 
     const totals = useMemo(() => {
-        const counted = rows.filter((visit) => visit.status !== STATUS.CANCELED);
+        const counted = rows.filter((visit) => !isAway(visit.status));
         const collected = counted.reduce((sum, visit) => sum + (visit.paid || 0), 0);
         const shares = counted.reduce((sum, visit) => sum + ((visit.paid || 0) * (visit.doctor?.prectange || 0)) / 100, 0);
         const owed = counted.reduce((sum, visit) => sum + Math.max(visit.remaining || 0, 0), 0);
@@ -147,7 +147,7 @@ const List = () => {
                         {
                             key: "remaining",
                             header: "المتبقي",
-                            render: (row) => (row.remaining > 0 && row.status !== STATUS.CANCELED ? <span className="font-medium text-amber-700">{money(row.remaining)}</span> : <span className="text-slate-400">—</span>),
+                            render: (row) => (row.remaining > 0 && !isAway(row.status) ? <span className="font-medium text-amber-700">{money(row.remaining)}</span> : <span className="text-slate-400">—</span>),
                         },
                     ]}
                 />

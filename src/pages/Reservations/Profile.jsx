@@ -1,35 +1,72 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { Banknote, Pencil, Plus, RotateCcw, Trash2, UserCheck } from "lucide-react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Banknote, CheckCircle2, Pencil, Plus, RotateCcw, Trash2, UserCheck, UserX } from "lucide-react";
 import { clsx } from "clsx";
 import { Alert, Badge, Button, ButtonLink, Card, CardBody, CardHeader, ConfirmDialog, Details, Field, Input, Modal, PageHeader, PageLoader, Textarea, useToast } from "../../ui";
 import { errorMessage, post } from "../../lib/api";
 import { useApi } from "../../lib/useApi";
 import { currentUser } from "../../constants/session";
-import { BOOKING_TYPES, PAYMENT_METHODS, STATUS, labelOf, money, todayString, visitBadge } from "../../constants/visits";
+import { BOOKING_TYPES, PAYMENT_METHODS, STATUS, isAway, labelOf, money, todayString, visitBadge } from "../../constants/visits";
+import AllergyAlert from "../../components/Medical/AllergyAlert";
+import Attachments from "../../components/Medical/Attachments";
+import MedicalBackground from "../../components/Medical/MedicalBackground";
+import VisitHistory from "../../components/Medical/VisitHistory";
+import WhatsAppButton from "../../components/WhatsApp/WhatsAppButton";
+import { confirmationText, receiptText, reminderText } from "../../lib/whatsapp";
 
 const dateTime = (value) => {
     const date = new Date(value);
     return `${date.toLocaleDateString("en-CA")} · ${date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
 };
 
-// One visit: who, where, when, its money and payments, and the diagnosis.
+// One visit: who, where, when, its money and payments, the diagnosis - and,
+// for the doctors (not the front desk), the patient's medical file.
 const Profile = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const toast = useToast();
-    const role = currentUser().role;
+    const me = currentUser();
+    const role = me.role;
     const desk = role === "owner" || role === "receptionist";
+    const medicalOn = role !== "receptionist";
+    const writesMedical = role === "doctor" || role === "owner";
 
     const { data: visit, loading, setData } = useApi(`show-reservation/${id}`);
+    const file = useApi(visit && medicalOn ? `patient-medical/${visit.patient_id}` : null);
     const [paying, setPaying] = useState(false);
+    const [justPaid, setJustPaid] = useState(false);
     const [confirm, setConfirm] = useState(null);
     const [busy, setBusy] = useState(false);
+    // Just booked from the booking page: offer to send the confirmation
+    const justBooked = location.state?.booked === true;
 
     if (loading || !visit) return <PageLoader />;
 
     const badge = visitBadge(visit);
-    const canPay = desk && visit.status !== STATUS.CANCELED && visit.remaining > 0;
+    const canPay = desk && !isAway(visit.status) && visit.remaining > 0;
+    // A booked patient who hasn't come, on a day that has come
+    const canMarkNoShow = desk && visit.status === STATUS.PENDING && !visit.arrived_at && visit.CustomDate <= todayString();
+    const canDeleteFile = (item) =>
+        role === "owner" || (role === "doctor" && item.uploaded_by_role === "doctor" && item.uploaded_by_id === me.id);
+
+    // Still to come: worth confirming or reminding
+    const upcoming = visit.status === STATUS.PENDING && visit.CustomDate >= todayString();
+    const markReminded = () =>
+        post("mark-reminded", { id: +id })
+            .then(setData)
+            .catch(() => {});
+
+    const markNoShow = () => {
+        setBusy(true);
+        post("clinic/edit-reservation", { id: +id, status: STATUS.NO_SHOW })
+            .then((row) => {
+                setData(row);
+                toast.info("اتسجل لم يحضر");
+            })
+            .catch((err) => toast.error(errorMessage(err)))
+            .finally(() => setBusy(false));
+    };
 
     const checkIn = () => {
         setBusy(true);
@@ -76,6 +113,7 @@ const Profile = () => {
                         {desk && visit.queue_state === "not_arrived" && visit.CustomDate === todayString() && (
                             <Button variant="success" icon={UserCheck} onClick={checkIn} loading={busy}>تسجيل وصول</Button>
                         )}
+                        {canMarkNoShow && <Button variant="secondary" icon={UserX} onClick={markNoShow} loading={busy}>لم يحضر</Button>}
                         {canPay && <Button icon={Banknote} onClick={() => setPaying(true)}>تسجيل دفعة</Button>}
                         {desk && <ButtonLink to={`/reservations-list/edit/${id}`} variant="secondary" icon={Pencil}>تعديل</ButtonLink>}
                         {role === "owner" && <Button variant="danger-ghost" size="icon" title="حذف الكشف" onClick={() => setConfirm({ type: "visit" })}><Trash2 className="h-4 w-4" /></Button>}
@@ -85,6 +123,16 @@ const Profile = () => {
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <div className="space-y-6 lg:col-span-2">
+                    {desk && justBooked && upcoming && (
+                        <Alert tone="success" icon={CheckCircle2} title={`تم الحجز · دور رقم ${visit.queue_number}`}>
+                            <p>ابعت تأكيد الحجز للمريض على واتساب.</p>
+                            <WhatsAppButton phone={visit.patientPhone} text={confirmationText(visit)} size="sm" className="mt-2">
+                                ابعت التأكيد
+                            </WhatsAppButton>
+                        </Alert>
+                    )}
+                    {medicalOn && <AllergyAlert medical={file.data?.medical} />}
+
                     {/* Turn and status */}
                     <Card>
                         <div className="flex flex-wrap items-center gap-5 p-5">
@@ -122,10 +170,55 @@ const Profile = () => {
                     </Card>
 
                     {role !== "receptionist" && <Diagnosis visit={visit} role={role} onSaved={setData} />}
+
+                    {medicalOn && file.data && (
+                        <>
+                            <Attachments
+                                patientId={visit.patient_id}
+                                reservationId={visit.id}
+                                items={file.data.attachments}
+                                onChange={(attachments) => file.setData((current) => ({ ...current, attachments }))}
+                                canUpload={writesMedical}
+                                canDelete={canDeleteFile}
+                            />
+                            <VisitHistory visits={file.data.visits} currentId={visit.id} />
+                        </>
+                    )}
                 </div>
 
-                {/* Money */}
+                {/* The patient's medical background, WhatsApp messages, then the money */}
                 <div className="space-y-6">
+                    {desk && (
+                        <Card>
+                            <CardHeader
+                                title="رسائل واتساب"
+                                description={visit.patientPhone ? <span className="ltr-nums">{visit.patientPhone}</span> : "مفيش رقم تليفون للمريض"}
+                            />
+                            <CardBody className="space-y-3">
+                                <div className="flex flex-wrap gap-2">
+                                    {upcoming && (
+                                        <>
+                                            <WhatsAppButton phone={visit.patientPhone} text={confirmationText(visit)} size="sm">تأكيد الحجز</WhatsAppButton>
+                                            <WhatsAppButton phone={visit.patientPhone} text={reminderText(visit)} onSent={markReminded} size="sm">تذكير</WhatsAppButton>
+                                        </>
+                                    )}
+                                    {visit.paid > 0 && (
+                                        <WhatsAppButton phone={visit.patientPhone} text={receiptText(visit)} size="sm">إيصال الدفع</WhatsAppButton>
+                                    )}
+                                    {!upcoming && !(visit.paid > 0) && <p className="text-sm text-slate-500">مفيش رسايل للكشف ده</p>}
+                                </div>
+                                {visit.reminded_at && <p className="text-xs text-slate-500">اتبعت تذكير {dateTime(visit.reminded_at)}</p>}
+                            </CardBody>
+                        </Card>
+                    )}
+                    {medicalOn && file.data && (
+                        <MedicalBackground
+                            patientId={visit.patient_id}
+                            medical={file.data.medical}
+                            canEdit={writesMedical}
+                            onSaved={(medical) => file.setData((current) => ({ ...current, medical }))}
+                        />
+                    )}
                     <Card>
                         <CardHeader title="الحساب" />
                         <CardBody className="space-y-3 text-sm">
@@ -151,6 +244,12 @@ const Profile = () => {
 
                     <Card>
                         <CardHeader title="المدفوعات" actions={canPay && <Button size="sm" variant="soft" icon={Plus} onClick={() => setPaying(true)}>دفعة</Button>} />
+                        {justPaid && (
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-5 py-3 text-sm text-emerald-800">
+                                <span>اتسجلت الدفعة. ابعت الإيصال؟</span>
+                                <WhatsAppButton phone={visit.patientPhone} text={receiptText(visit)} onSent={() => setJustPaid(false)} size="sm">إيصال واتساب</WhatsAppButton>
+                            </div>
+                        )}
                         {visit.payments.length ? (
                             <ul className="divide-y divide-slate-100">
                                 {visit.payments.map((payment) => (
@@ -174,7 +273,7 @@ const Profile = () => {
                 </div>
             </div>
 
-            {paying && <PaymentModal visit={visit} onClose={() => setPaying(false)} onPaid={(row) => { setData(row); setPaying(false); }} />}
+            {paying && <PaymentModal visit={visit} onClose={() => setPaying(false)} onPaid={(row) => { setData(row); setPaying(false); setJustPaid(true); }} />}
             <ConfirmDialog
                 open={confirm?.type === "visit"}
                 onClose={() => setConfirm(null)}

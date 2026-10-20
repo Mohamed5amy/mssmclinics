@@ -14,12 +14,16 @@ export const BOOKING_TYPES = [
 ];
 
 // The visit statuses are stored as this Arabic text.
-export const STATUS = { PENDING: "فى الانتظار", DONE: "مكتمل", CANCELED: "ملغي" };
+export const STATUS = { PENDING: "فى الانتظار", DONE: "مكتمل", CANCELED: "ملغي", NO_SHOW: "لم يحضر" };
 export const STATUSES = [
     { id: STATUS.PENDING, name: "لم يكتمل", tone: "amber" },
     { id: STATUS.DONE, name: "مكتمل", tone: "green" },
-    { id: STATUS.CANCELED, name: "ملغي", tone: "red" },
+    { id: STATUS.CANCELED, name: "ملغي", tone: "gray" },
+    { id: STATUS.NO_SHOW, name: "لم يحضر", tone: "red" },
 ];
+
+// Off the day: canceled, or the patient never came. Not counted, nothing owed.
+export const isAway = (status) => status === STATUS.CANCELED || status === STATUS.NO_SHOW;
 export const statusOf = (id) => STATUSES.find((status) => status.id === id) ?? { name: id, tone: "gray" };
 
 // Where a visit stands in the day's queue.
@@ -28,7 +32,8 @@ export const QUEUE_STATES = {
     waiting: { name: "في الانتظار", tone: "amber" },
     with_doctor: { name: "عند الدكتور", tone: "blue" },
     done: { name: "انتهى", tone: "green" },
-    canceled: { name: "ملغي", tone: "red" },
+    canceled: { name: "ملغي", tone: "gray" },
+    no_show: { name: "لم يحضر", tone: "red" },
 };
 
 // The one badge a visit shows: an open visit today says where it is in the

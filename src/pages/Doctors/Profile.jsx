@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { CalendarClock, CalendarDays, KeyRound, Pencil, Trash2 } from "lucide-react";
+import { CalendarClock, CalendarDays, HandCoins, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { Badge, Button, ButtonLink, Card, CardHeader, ConfirmDialog, DataTable, Details, PageHeader, PageLoader, StatCard, useToast } from "../../ui";
 import { errorMessage, post } from "../../lib/api";
 import { useApi } from "../../lib/useApi";
 import { currentUser } from "../../constants/session";
-import { STATUS, money, monthRange, visitBadge } from "../../constants/visits";
+import { isAway, money, monthRange, visitBadge } from "../../constants/visits";
 import { weekSummary } from "../../lib/hours";
 import ResetPassword from "../../components/ResetPassword/ResetPassword";
 
@@ -24,7 +24,7 @@ const Profile = () => {
 
     const month = useMemo(() => {
         const { start, end } = monthRange();
-        const visits = (doctor?.reservations ?? []).filter((visit) => visit.CustomDate >= start && visit.CustomDate <= end && visit.status !== STATUS.CANCELED);
+        const visits = (doctor?.reservations ?? []).filter((visit) => visit.CustomDate >= start && visit.CustomDate <= end && !isAway(visit.status));
         const collected = visits.reduce((sum, visit) => sum + (visit.paid || 0), 0);
         return { count: visits.length, collected, share: (collected * (doctor?.prectange || 0)) / 100 };
     }, [doctor]);
@@ -54,6 +54,7 @@ const Profile = () => {
                 actions={
                     owner && (
                         <>
+                            <ButtonLink to={`/statement?doctor_id=${id}`} variant="secondary" icon={HandCoins}>كشف الحساب</ButtonLink>
                             <ButtonLink to={`/doctors-list/edit/${id}`} variant="secondary" icon={Pencil}>تعديل</ButtonLink>
                             <Button variant="secondary" icon={KeyRound} onClick={() => setResetting(true)}>كلمة المرور</Button>
                             <Button variant="danger-ghost" icon={Trash2} onClick={() => setConfirm(true)}>حذف</Button>

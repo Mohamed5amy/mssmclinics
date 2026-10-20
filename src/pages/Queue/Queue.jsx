@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarPlus, FileText, ListOrdered, RefreshCw, SkipForward, UserCheck } from "lucide-react";
+import { CalendarPlus, FileText, ListOrdered, RefreshCw, SkipForward, UserCheck, UserX } from "lucide-react";
 import { clsx } from "clsx";
 import { Badge, Button, ButtonLink, Card, EmptyState, Input, PageHeader, PageLoader, Select, useToast } from "../../ui";
 import { errorMessage, post } from "../../lib/api";
 import { useApi } from "../../lib/useApi";
 import { currentUser } from "../../constants/session";
-import { BOOKING_TYPES, QUEUE_STATES, labelOf, longDate, money, todayString } from "../../constants/visits";
+import { BOOKING_TYPES, QUEUE_STATES, STATUS, labelOf, longDate, money, todayString } from "../../constants/visits";
 
 // The day's queue (الدور), one card per branch and doctor: who is in with the
 // doctor, who is waiting, and who booked but hasn't arrived. The desk checks
@@ -61,6 +61,16 @@ const Queue = () => {
         post("check-in-reservation", { id: row.id })
             .then(() => {
                 toast.success(`${row.name} وصل`);
+                reload(true);
+            })
+            .catch((err) => toast.error(errorMessage(err)))
+            .finally(() => setBusy(null));
+    };
+    const noShow = (row) => {
+        setBusy("n" + row.id);
+        post("clinic/edit-reservation", { id: row.id, status: STATUS.NO_SHOW })
+            .then(() => {
+                toast.info(`${row.name}: لم يحضر`);
                 reload(true);
             })
             .catch((err) => toast.error(errorMessage(err)))
@@ -126,6 +136,7 @@ const Queue = () => {
                             busy={busy}
                             onNext={() => next(queue)}
                             onCheckIn={checkIn}
+                            onNoShow={noShow}
                         />
                     ))}
                 </div>
@@ -134,8 +145,10 @@ const Queue = () => {
     );
 };
 
-const QueueCard = ({ queue, desk, canCall, canCheckIn, busy, onNext, onCheckIn }) => {
+const QueueCard = ({ queue, desk, canCall, canCheckIn, busy, onNext, onCheckIn, onNoShow }) => {
     const navigate = useNavigate();
+    // A booking whose time has passed without the patient can be marked "didn't come"
+    const now = new Date().toTimeString().slice(0, 5);
     const current = queue.rows.find((row) => row.queue_state === "with_doctor");
     const waiting = queue.rows.filter((row) => row.queue_state === "waiting").length;
 
@@ -174,7 +187,7 @@ const QueueCard = ({ queue, desk, canCall, canCheckIn, busy, onNext, onCheckIn }
             <ul className="flex-1 divide-y divide-slate-100">
                 {queue.rows.map((row) => {
                     const state = QUEUE_STATES[row.queue_state] ?? QUEUE_STATES.not_arrived;
-                    const finished = row.queue_state === "done" || row.queue_state === "canceled";
+                    const finished = ["done", "canceled", "no_show"].includes(row.queue_state);
                     return (
                         <li
                             key={row.id}
@@ -192,24 +205,42 @@ const QueueCard = ({ queue, desk, canCall, canCheckIn, busy, onNext, onCheckIn }
                                 </p>
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
-                                {desk && row.queue_state !== "canceled" && (
+                                {desk && !["canceled", "no_show"].includes(row.queue_state) && (
                                     row.net_price === 0 ? <Badge tone="green">مجاني</Badge>
                                         : row.remaining > 0 ? <Badge tone="amber">متبقي {money(row.remaining)}</Badge>
                                             : <Badge tone="green">مدفوع</Badge>
                                 )}
                                 {canCheckIn && row.queue_state === "not_arrived" ? (
-                                    <Button
-                                        size="sm"
-                                        variant="soft"
-                                        icon={UserCheck}
-                                        loading={busy === "v" + row.id}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onCheckIn(row);
-                                        }}
-                                    >
-                                        وصل
-                                    </Button>
+                                    <>
+                                        {row.time && row.time < now && (
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                icon={UserX}
+                                                title="لم يحضر"
+                                                loading={busy === "n" + row.id}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onNoShow(row);
+                                                }}
+                                                className="text-slate-500 hover:text-red-600"
+                                            >
+                                                <span className="hidden sm:inline">لم يحضر</span>
+                                            </Button>
+                                        )}
+                                        <Button
+                                            size="sm"
+                                            variant="soft"
+                                            icon={UserCheck}
+                                            loading={busy === "v" + row.id}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onCheckIn(row);
+                                            }}
+                                        >
+                                            وصل
+                                        </Button>
+                                    </>
                                 ) : (
                                     <Badge tone={state.tone}>{state.name}</Badge>
                                 )}
