@@ -1,115 +1,67 @@
-import {
-    Button,
-    IconButton,
-    InputAdornment,
-    MenuItem,
-    Stack,
-    TextField,
-    Typography,
-} from "@mui/material";
-import Container from "../../components/Container/Container";
-import Table from "../../components/Table/Table";
-import SearchIcon from "@mui/icons-material/Search";
-import { Link } from "react-router-dom";
-import AddCircleOutlineRoundedIcon from "@mui/icons-material/AddCircleOutlineRounded";
-import { useEffect, useState } from "react";
-import axios from "axios";
-import { CSVLink } from "react-csv";
-import SaveAltIcon from "@mui/icons-material/SaveAlt";
-import useSearch from "../../hooks/Search/useSearch";
-import useRole from "../../hooks/Role/useRole";
+import { useMemo, useState } from "react";
+import { Search, UserPlus, Users } from "lucide-react";
+import { ButtonLink, Card, DataTable, Input, PageHeader, Select } from "../../ui";
+import { useApi } from "../../lib/useApi";
+import { currentUser } from "../../constants/session";
+import { matchesPatient } from "../../lib/search";
 
+// The group's patient files (one per patient, shared by every branch).
 const List = () => {
-
-    const headers = ["اسم المريض" , "رقم الهاتف" , "العمر" , "عن طريق" ]
-    const body = ["name" , "phone" , "age" , "providerName"]
-
-    const [loading, setLoading] = useState(false);
-    const [admins, setAdmins] = useState([]);
-
-    const [clinicId, setClinicId] = useState("")
-
-    // Get Admins
-    useEffect(() => {
-        setLoading(true);
-        axios
-            .get(import.meta.env.VITE_API + "list-patients?" + `${clinicId && "clinic_id=" + clinicId + "&"}`, {
-                headers: {
-                    Authorization: "Bearer " + localStorage.getItem("token"),
-                },
-            })
-            .then((res) => {
-                console.log(res.data.data);
-                setAdmins(res.data.data.reverse());
-            })
-            .catch((err) => {
-                console.log(err);
-            })
-            .finally(() => {
-                setLoading(false);
-            });
-    }, [clinicId]);
-
-    // Search Admins
+    const user = currentUser();
+    const platform = user.role === "admin";
+    const desk = user.role === "owner" || user.role === "receptionist";
+    const [groupId, setGroupId] = useState("");
     const [search, setSearch] = useState("");
-    const filteredData = useSearch({data : admins , name : "name" , search : search})
 
-    
-    const role = useRole();
-
-    // Filter with clinics
-    const [clinics, setClinics] = useState([])
-
-    useEffect(() => {
-        setLoading(true);
-        axios
-            .get(import.meta.env.VITE_API + "list-clinic" , {
-                headers: {
-                    Authorization: "Bearer " + localStorage.getItem("token"),
-                },
-            })
-            .then((res) => {
-                console.log(res.data.data);
-                setClinics(res.data.data);
-            })
-            .catch((err) => {
-                console.log(err);
-            })
-            .finally(() => {
-                setLoading(false);
-            });
-    }, []);
+    const groups = useApi(platform ? "list-groups" : null);
+    const { data, loading } = useApi("list-patients", { group_id: groupId });
+    const rows = useMemo(() => [...(data ?? [])].reverse().filter((patient) => matchesPatient(patient, search)), [data, search]);
 
     return (
-        <Container>
-            {/* Filter */}
-            <Stack direction={{xs : "column" , sm : "row"}} alignItems={"center"} justifyContent={"space-between"} mb={8} spacing={8} >
-                <Stack direction={{xs : "column" , sm : "row"}} spacing={4}>
-
-                    <TextField type="search" sx={{ bgcolor: "primary.white" }} placeholder="البحث بالاسم" InputProps={{startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>)}} value={search} onChange={(e) => setSearch(e.target.value)}/>
-
-                    { (role === 1 || role === 2) && <TextField label={"العيادة"} select sx={{minWidth : "200px"}} value={clinicId} onChange={e => setClinicId(e.target.value)} >
-                        <MenuItem value="" > الكل </MenuItem>
-                        {clinics && clinics.map(admin => {
-                            return (
-                                <MenuItem key={admin.id} value={admin.id}> {admin.name} </MenuItem>
-                            )
-                        })}
-                    </TextField>}
-                </Stack>
-                <Stack direction={"row"} spacing={8} alignItems={"center"}>
-                    {role === 3 && <Link to={"add"}>
-                        <Button startIcon={<AddCircleOutlineRoundedIcon />} variant="contained" sx={{ p: "16px 40px", borderRadius: "8px" }} > اضافة مريض </Button>
-                    </Link>}
-
-                    <CSVLink data={filteredData}><IconButton color="primary"><SaveAltIcon /></IconButton></CSVLink>
-                </Stack>
-            </Stack>
-            {/* Table */}
-            <Table headers={headers} data={filteredData} loading={loading} edit={role == 3 && true}  profile={true} body={body} />
-            {/* Number */}
-            <Typography fontWeight={500} color={"text.secondary"} mt={4}> عدد المرضي : {filteredData?.length} </Typography>
-        </Container>
+        <>
+            <PageHeader
+                title="المرضى"
+                subtitle={`${data?.length ?? 0} ملف${platform ? "" : " · مشتركين بين كل الفروع"}`}
+                actions={desk && <ButtonLink to="/patients-list/add" icon={UserPlus}>مريض جديد</ButtonLink>}
+            />
+            <Card>
+                <div className="flex flex-wrap gap-3 border-b border-slate-100 p-4">
+                    <div className="relative w-full max-w-sm">
+                        <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 text-slate-400" />
+                        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث بالاسم او رقم التليفون" className="ps-9" />
+                    </div>
+                    {platform && (
+                        <Select value={groupId} onChange={(e) => setGroupId(e.target.value)} className="w-auto min-w-44">
+                            <option value="">كل المجموعات</option>
+                            {groups.data?.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                        </Select>
+                    )}
+                </div>
+                <DataTable
+                    loading={loading}
+                    rows={rows}
+                    rowLink={(row) => `/patients-list/${row.id}`}
+                    emptyIcon={Users}
+                    empty={search ? "مفيش مريض بالاسم او الرقم ده" : "لسه مفيش مرضى"}
+                    columns={[
+                        {
+                            key: "name",
+                            header: "المريض",
+                            render: (row) => (
+                                <div>
+                                    <p className="font-medium text-slate-900">{row.name}</p>
+                                    <p className="text-xs text-slate-500">{row.sex} · {row.age} سنة</p>
+                                </div>
+                            ),
+                        },
+                        { key: "phone", header: "التليفون", render: (row) => <span className="ltr-nums">{row.phone}</span> },
+                        { key: "clinicName", header: "اتسجل في", render: (row) => row.clinicName || "—" },
+                        { key: "providerName", header: "عرفنا عن طريق" },
+                        ...(platform ? [{ key: "groupName", header: "المجموعة" }] : []),
+                    ]}
+                />
+            </Card>
+        </>
     );
 };
 

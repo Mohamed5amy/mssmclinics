@@ -1,364 +1,113 @@
-import { ThemeProvider } from "@emotion/react";
-import { createTheme } from "@mui/material";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import Login from "./pages/Login/Login";
-import LoginAdmin from "./pages/Login_Admins/Login";
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider, RequireAuth } from "react-auth-kit";
+import { ToastProvider } from "./ui";
+import { homeFor } from "./constants/roles";
+import AppLayout from "./layout/AppLayout";
+import Login from "./pages/Login/Login";
 
-import Admins_List from "./pages/Admins/List";
-import Admins_Profile from "./pages/Admins/Profile";
-import Admins_Add from "./pages/Admins/Add";
-import Admins_Edit from "./pages/Admins/Edit";
-import ChangePassA from "./pages/Admins/ChangePassA";
-
-
-import Doctors_List from "./pages/Doctors/List";
-import Doctors_Profile from "./pages/Doctors/Profile";
-import Doctors_Edit from "./pages/Doctors/Edit";
-import Doctors_Add from "./pages/Doctors/Add";
-
+import Insights from "./pages/Insights/Insights";
+import Groups_List from "./pages/Groups/List";
+import Groups_Profile from "./pages/Groups/Profile";
+import Groups_Form from "./pages/Groups/Form";
 import Clinics_List from "./pages/Clinics/List";
 import Clinics_Profile from "./pages/Clinics/Profile";
-import Clinics_Edit from "./pages/Clinics/Edit";
-import Clinics_Add from "./pages/Clinics/Add";
-import ChangePass from "./pages/Clinics/ChangePass";
-
-import Patient_List from "./pages/Patients/List";
-import Patient_Profile from "./pages/Patients/Profile";
-import Patient_Add from "./pages/Patients/Add";
-import Patients_Edit from "./pages/Patients/Edit";
-
+import Clinics_Form from "./pages/Clinics/Form";
+import Doctors_List from "./pages/Doctors/List";
+import Doctors_Profile from "./pages/Doctors/Profile";
+import Doctors_Form from "./pages/Doctors/Form";
+import Receptionists from "./pages/Receptionists/Receptionists";
+import Patients_List from "./pages/Patients/List";
+import Patients_Profile from "./pages/Patients/Profile";
+import Patients_Form from "./pages/Patients/Form";
 import Reservations_List from "./pages/Reservations/List";
 import Reservations_Profile from "./pages/Reservations/Profile";
-import Reservations_Edit from "./pages/Reservations/Edit";
 import Reservations_Add from "./pages/Reservations/Add";
-
-
-import { Provider } from "react-redux";
-import store from "./store"; 
+import Reservations_Edit from "./pages/Reservations/Edit";
+import Queue from "./pages/Queue/Queue";
+import Schedules from "./pages/Schedules/Schedules";
 import Settings from "./pages/Settings/Settings";
 
-// import Login_Client from "./pages/Login_Client/Login_Client";
+// Pages only some accounts may open (by the role name the API returns);
+// anyone else lands on their own home page.
+const RequireRole = ({ roles }) => {
+    const role = localStorage.getItem("role");
+    return roles.includes(role) ? <Outlet /> : <Navigate to={homeFor(role)} replace />;
+};
 
-// RTL
-import rtlPlugin from 'stylis-plugin-rtl';
-import {prefixer} from 'stylis';
-import {CacheProvider} from '@emotion/react';
-import createCache from '@emotion/cache';
-import Insights from "./pages/Insights/Insights";
-
+const PLATFORM = ["admin"];
+const OWNER = ["owner"];
+const MANAGEMENT = ["admin", "owner"];
+const DESK = ["owner", "receptionist"];
+const STAFF = ["admin", "owner", "receptionist"];
+const EVERYONE = ["admin", "owner", "receptionist", "doctor"];
 
 function App() {
-
-    const cacheRtl = createCache({
-        key: 'muirtl',
-        stylisPlugins: [prefixer, rtlPlugin],
-    });
-
-    const theme = createTheme({
-        direction: "rtl",
-        palette: {
-            primary: {
-                main: "#358efc",
-                secondary: "#28e3e1",
-                border: "#D9DFEC",
-                background: "#ECEFF9",
-                white: "#FBFCFE",
-                inputs: "#B1BAD2",
-                icons: "#545F7D",
-            },
-            text: {
-                primary: "#081330",
-                secondary: "#414C6A",
-                title: "#050C1E",
-            },
-        },
-        typography: {
-            fontFamily: "'Inter', sans-serif",
-            h1: {
-                fontSize: "32px",
-                fontWeight: "600",
-                lineHeight: "120%",
-            },
-            h2: {
-                fontSize: "24px",
-                fontWeight: "500",
-                lineHeight: "120%",
-            },
-            h3: {
-                fontSize: "22px",
-                fontWeight: "500",
-                lineHeight: "160%",
-            },
-            h4: {
-                fontSize: "20px",
-                fontWeight: "700",
-                lineHeight: "120%",
-            },
-            title: {
-                fontSize: "18px",
-                fontWeight: "500",
-                lineHeight: "140%",
-            },
-            subtitle: {
-                fontSize: "16px",
-                fontWeight: "500",
-                lineHeight: "140%",
-            },
-            body: {
-                fontSize: "14px",
-                fontWeight: "400",
-                lineHeight: "140%",
-            },
-            inputs: {
-                fontSize: "14px",
-                fontWeight: "400",
-                lineHeight: "140%",
-            },
-            button: {
-                fontSize: "16px",
-                fontWeight: "500",
-                textTransform: "capitalize",
-            },
-            label: {
-                fontSize: "16px",
-                fontWeight: "400",
-                lineHeight: "140%",
-            },
-            breadcrumbs: {
-                fontSize: "15px",
-                fontWeight: "500",
-            },
-        },
-        spacing: 2,
-    });
-
     return (
-        <AuthProvider
-            authType={"cookie"}
-            authName={"_auth"}
-            cookieDomain={window.location.hostname}
-            // cookieSecure={window.location.protocol === "https:"}
-        >
-            <CacheProvider value={cacheRtl} >
-                <ThemeProvider theme={theme}>
-                    <Provider store={store}>
-                        <MyApp />
-                    </Provider>
-                </ThemeProvider>
-            </CacheProvider>
+        <AuthProvider authType={"cookie"} authName={"_auth"} cookieDomain={window.location.hostname}>
+            <ToastProvider>
+                <BrowserRouter>
+                    <Routes>
+                        {/* One sign-in page for every account */}
+                        <Route path="/" element={<Login />} />
+                        <Route path="/login-admin" element={<Navigate to="/" replace />} />
+
+                        <Route
+                            element={
+                                <RequireAuth loginPath="/">
+                                    <AppLayout />
+                                </RequireAuth>
+                            }
+                        >
+                            <Route element={<RequireRole roles={MANAGEMENT} />}>
+                                <Route path="/insights" element={<Insights />} />
+                                <Route path="/clinics-list" element={<Clinics_List />} />
+                                <Route path="/clinics-list/:id" element={<Clinics_Profile />} />
+                                <Route path="/doctors-list" element={<Doctors_List />} />
+                                <Route path="/doctors-list/:id" element={<Doctors_Profile />} />
+                                <Route path="/receptionists" element={<Receptionists />} />
+                            </Route>
+
+                            <Route element={<RequireRole roles={PLATFORM} />}>
+                                <Route path="/groups" element={<Groups_List />} />
+                                <Route path="/groups/add" element={<Groups_Form />} />
+                                <Route path="/groups/edit/:id" element={<Groups_Form />} />
+                                <Route path="/groups/:id" element={<Groups_Profile />} />
+                            </Route>
+
+                            <Route element={<RequireRole roles={OWNER} />}>
+                                <Route path="/clinics-list/add" element={<Clinics_Form />} />
+                                <Route path="/clinics-list/edit/:id" element={<Clinics_Form />} />
+                                <Route path="/doctors-list/add" element={<Doctors_Form />} />
+                                <Route path="/doctors-list/edit/:id" element={<Doctors_Form />} />
+                                <Route path="/settings" element={<Settings />} />
+                            </Route>
+
+                            <Route element={<RequireRole roles={STAFF} />}>
+                                <Route path="/patients-list" element={<Patients_List />} />
+                                <Route path="/patients-list/:id" element={<Patients_Profile />} />
+                            </Route>
+
+                            <Route element={<RequireRole roles={DESK} />}>
+                                <Route path="/patients-list/add" element={<Patients_Form />} />
+                                <Route path="/patients-list/edit/:id" element={<Patients_Form />} />
+                                <Route path="/reservations-list/add" element={<Reservations_Add />} />
+                                <Route path="/reservations-list/edit/:id" element={<Reservations_Edit />} />
+                            </Route>
+
+                            <Route element={<RequireRole roles={EVERYONE} />}>
+                                <Route path="/queue" element={<Queue />} />
+                                <Route path="/schedules" element={<Schedules />} />
+                                <Route path="/reservations-list" element={<Reservations_List />} />
+                                <Route path="/reservations-list/:id" element={<Reservations_Profile />} />
+                            </Route>
+                        </Route>
+
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                </BrowserRouter>
+            </ToastProvider>
         </AuthProvider>
     );
 }
-
-const MyApp = () => {
-    return (
-        <BrowserRouter>
-            <Routes>
-                <Route element={<Login />} path="/" />
-                <Route element={<LoginAdmin />} path="/login-admin" />
-                {/* Admins */}
-                <Route
-                    path="/admins-list"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Admins_List />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/admins-list/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Admins_Profile />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/admins-list/edit/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Admins_Edit />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/admins-list/add"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Admins_Add />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/admins-list/edit/:id/change-password/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <ChangePassA />
-                        </RequireAuth>
-                    }
-                />
-                {/* Doctors */}
-                <Route
-                    path="/doctors-list"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Doctors_List />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/doctors-list/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Doctors_Profile />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/doctors-list/edit/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Doctors_Edit />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/doctors-list/add"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Doctors_Add />
-                        </RequireAuth>
-                    }
-                />
-                {/* Patients */}
-                <Route
-                    path="/patients-list"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Patient_List />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/patients-list/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Patient_Profile />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/patients-list/add"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Patient_Add />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/patients-list/edit/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Patients_Edit />
-                        </RequireAuth>
-                    }
-                />
-                {/* Clinics */}
-                <Route
-                    path="/clinics-list"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Clinics_List />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/clinics-list/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Clinics_Profile />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/clinics-list/edit/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Clinics_Edit />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/clinics-list/add"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Clinics_Add />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/clinics-list/edit/:id/change-password/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <ChangePass />
-                        </RequireAuth>
-                    }
-                />
-                {/* reservations */}
-                <Route
-                    path="/reservations-list"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Reservations_List />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/reservations-list/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Reservations_Profile />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/reservations-list/edit/:id"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Reservations_Edit />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/reservations-list/add"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Reservations_Add />
-                        </RequireAuth>
-                    }
-                />
-                {/* Settings */}
-                <Route
-                    path="/settings"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Settings />
-                        </RequireAuth>
-                    }
-                />
-                {/* Insights */}
-                <Route
-                    path="/insights"
-                    element={
-                        <RequireAuth loginPath="/">
-                            <Insights />
-                        </RequireAuth>
-                    }
-                />
-            </Routes>
-        </BrowserRouter>
-    );
-};
 
 export default App;

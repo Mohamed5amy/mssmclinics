@@ -1,234 +1,128 @@
-import {
-    Box,
-    Button,
-    Grid,
-    IconButton,
-    Stack,
-    Typography,
-} from "@mui/material";
-import Container from "../../components/Container/Container";
-import Back from "../../components/Back/Back";
-import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import axios from "axios";
-import Popup from "../../components/Popup/Popup";
-import useRole from "../../hooks/Role/useRole";
+import { useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { CalendarPlus, Pencil, Phone, Trash2 } from "lucide-react";
+import { Badge, Button, ButtonLink, Card, CardHeader, ConfirmDialog, DataTable, Details, PageHeader, PageLoader, StatCard, useToast } from "../../ui";
+import { errorMessage, post } from "../../lib/api";
+import { useApi } from "../../lib/useApi";
+import { currentUser } from "../../constants/session";
+import { STATUS, money, visitBadge } from "../../constants/visits";
 
-
-
-
+// A patient's file: who they are, what they owe, and every visit (within the
+// account's reach - a receptionist sees its own branch's).
 const Profile = () => {
-    
     const { id } = useParams();
-    const [admin, setAdmin] = useState({});
-
-    useEffect(() => {
-        axios
-            .get(import.meta.env.VITE_API + "show-patients/" + id, {
-                headers: {
-                    Authorization: "Bearer " + localStorage.getItem("token"),
-                },
-            })
-            .then((res) => {
-                console.log(res.data.data);
-                setAdmin(res.data.data);
-            })
-            .catch((err) => {
-                console.log(err);
-            });
-    }, [id]);
-
-    // handle delete
-    const [open, setOpen] = useState(false);
     const navigate = useNavigate();
+    const toast = useToast();
+    const role = currentUser().role;
+    const desk = role === "owner" || role === "receptionist";
 
-    const handleDelete = () => {
-        axios
-            .post(
-                import.meta.env.VITE_API + "delete-patient",
-                { id },
-                {
-                    headers: {
-                        Authorization:
-                            "Bearer " + localStorage.getItem("token"),
-                    },
-                }
-            )
-            .then((res) => {
+    const { data: patient, loading } = useApi(`show-patients/${id}`);
+    const [confirm, setConfirm] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    const totals = useMemo(() => {
+        const visits = (patient?.reservations ?? []).filter((visit) => visit.status !== STATUS.CANCELED);
+        return {
+            visits: visits.length,
+            paid: visits.reduce((sum, visit) => sum + (visit.paid || 0), 0),
+            owed: visits.reduce((sum, visit) => sum + Math.max(visit.remaining || 0, 0), 0),
+        };
+    }, [patient]);
+
+    if (loading || !patient) return <PageLoader />;
+
+    const remove = () => {
+        setBusy(true);
+        post("delete-patient", { id: +id })
+            .then(() => {
+                toast.success("تم حذف الملف");
                 navigate("/patients-list");
-                console.log(res);
             })
-            .catch((err) => {
-                console.log(err);
-            });
+            .catch((err) => toast.error(errorMessage(err)))
+            .finally(() => setBusy(false));
     };
 
-    const role = useRole()
-
     return (
-        <Container>
-            {/* Header */}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={{ xs: 4, sm: 0 }} justifyContent={"space-between"} alignItems={"center"} >
-                <Back title={"بيانات المريض"} />
-                {role === 3 && <Link onClick={() => localStorage.setItem("admin_edit_data",JSON.stringify(admin))} to={"/patients-list/edit/" + admin?.id} >
-                    <Button sx={{ p: "16px 40px", borderRadius: "8px" }} variant="contained" > تعديل الملف الشخصي </Button>
-                </Link>}
-            </Stack>
-            {/* Box Content */}
-            <AdminData admin={admin} setOpen={setOpen} />
-            {/* Popup */}
-            <Popup
-                open={open}
-                setOpen={setOpen}
-                message={"هل انت متأكد انك تريد حذف هذا المريض ؟"}
-                type="delete"
-                fn={handleDelete}
+        <>
+            <PageHeader
+                title={patient.name}
+                subtitle={<span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /><span className="ltr-nums">{patient.phone}</span></span>}
+                back
+                actions={
+                    <>
+                        {desk && <ButtonLink to={`/reservations-list/add?patient_id=${id}`} icon={CalendarPlus}>حجز</ButtonLink>}
+                        {desk && <ButtonLink to={`/patients-list/edit/${id}`} variant="secondary" icon={Pencil}>تعديل</ButtonLink>}
+                        {role === "owner" && <Button variant="danger-ghost" size="icon" title="حذف" onClick={() => setConfirm(true)}><Trash2 className="h-4 w-4" /></Button>}
+                    </>
+                }
             />
-        </Container>
-    );
-};
 
-const AdminData = ({ admin, setOpen }) => {
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <StatCard label="الزيارات" value={totals.visits} />
+                <StatCard label="المدفوع" value={money(totals.paid)} tone="green" />
+                <StatCard label="المتبقي عليه" value={money(totals.owed)} tone={totals.owed > 0 ? "amber" : "gray"} />
+            </div>
 
-    const role = useRole()
+            <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <Card>
+                    <CardHeader title="البيانات" />
+                    <div className="p-5">
+                        <Details
+                            columns={1}
+                            items={[
+                                { label: "النوع", value: patient.sex },
+                                { label: "السن", value: `${patient.age} سنة` },
+                                { label: "العنوان", value: patient.address },
+                                { label: "عرفنا عن طريق", value: patient.providerName },
+                                { label: "اتسجل في", value: patient.clinicName || "—" },
+                                { label: "عميل من", value: patient.created_at?.slice(0, 10) },
+                                { label: "المجموعة", value: patient.groupName, hidden: role !== "admin" },
+                            ]}
+                        />
+                    </div>
+                </Card>
+                <Card className="lg:col-span-2">
+                    <CardHeader title="الزيارات" />
+                    <DataTable
+                        rows={patient.reservations}
+                        rowLink={(row) => `/reservations-list/${row.id}`}
+                        empty="لسه مفيش زيارات"
+                        emptyAction={desk && <ButtonLink to={`/reservations-list/add?patient_id=${id}`} icon={CalendarPlus}>حجز</ButtonLink>}
+                        columns={[
+                            { key: "CustomDate", header: "التاريخ" },
+                            {
+                                key: "doctorName",
+                                header: "الدكتور",
+                                render: (row) => (
+                                    <div>
+                                        <p className="font-medium text-slate-900">{row.doctorName}</p>
+                                        <p className="text-xs text-slate-500">{row.clinicName}</p>
+                                    </div>
+                                ),
+                            },
+                            { key: "serviceName", header: "الخدمة", render: (row) => <>{row.serviceName}{row.is_followup && <Badge tone="violet" className="ms-2">إعادة</Badge>}</> },
+                            { key: "status", header: "الحالة", render: (row) => <Badge tone={visitBadge(row).tone}>{visitBadge(row).name}</Badge> },
+                            { key: "paid", header: "المدفوع", render: (row) => money(row.paid) },
+                            {
+                                key: "remaining",
+                                header: "المتبقي",
+                                render: (row) => (row.remaining > 0 && row.status !== STATUS.CANCELED ? <span className="font-medium text-amber-700">{money(row.remaining)}</span> : <span className="text-slate-400">—</span>),
+                            },
+                        ]}
+                    />
+                </Card>
+            </div>
 
-    const data = [
-        {
-            key: "الاسم :",
-            value: admin?.name,
-        },
-        {
-            key: "رقم الهاتف :",
-            value: admin?.phone,
-        },
-        {
-            key: "الجنس :",
-            value: admin?.sex,
-        },
-        {
-            key: "العمر :",
-            value: admin?.age,
-        },
-        {
-            key: "العنوان :",
-            value: admin?.address,
-        },
-        
-    ];
-
-    const data2 = [
-        {
-            key: role === 3 ? "اسم العيادة" : "العيادة :",
-            value: role === 3 ? admin?.clinicName : admin?.clinicBranch,
-        },
-        {
-            key: "عدد الزيارات :",
-            value: admin?.reservations?.length,
-        },
-        {
-            key: "عميل منذ :",
-            value: admin?.created_at?.slice(0 , 10),
-        },
-        {
-            key: "عن طريق :",
-            value: admin?.providerName,
-        },
-    ];
-
-    return (
-        <Box
-            bgcolor={"primary.white"}
-            p={"32px 16px"}
-            borderRadius={"12px"}
-            mt={8}
-        >
-            {/* Name && Icons */}
-            <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={{ xs: 4, sm: 0 }}
-                justifyContent={"space-between"}
-                pb={8}
-                mb={12}
-                borderBottom={"1px solid"}
-                borderColor={"primary.border"}
-            >
-                {/* Name */}
-                <Stack spacing={4}>
-                    <Typography variant="h3"> {admin?.name} </Typography>
-                    <Typography variant="body"> {admin?.phone} </Typography>
-                </Stack>
-                {/* Icons */}
-                {(role == 3 || role == 1) && <Stack spacing={4} direction={"row"} alignItems={"center"}>
-                    <IconButton color="error" onClick={() => setOpen(true)}>
-                        <DeleteOutlineRoundedIcon />
-                    </IconButton>
-                </Stack>}
-            </Stack>
-            {/* Profile Data */}
-            <Grid container spacing={{ xs: 8, md: 0 }}>
-                {/* Left */}
-                <Grid item xs={12} md={6}>
-                    <Stack spacing={8}>
-                        {data?.map((item, i) => {
-                            return (
-                                <Stack
-                                    direction={{xs : "column" , sm : "row"}} 
-                                    spacing={{xs : 2 , sm : 12}}
-                                    key={i}
-                                >
-                                    <Typography
-                                        width={"170px"}
-                                        variant="subtitle"
-                                        color={"text.secondary"}
-                                    >
-                                        
-                                        {item.key}
-                                    </Typography>
-                                    <Typography
-                                        width={"250px"}
-                                        variant="subtitle"
-                                    >
-                                        
-                                        {item.value}
-                                    </Typography>
-                                </Stack>
-                            );
-                        })}
-                    </Stack>
-                </Grid>
-                {/* Right */}
-                <Grid item xs={12} md={6}>
-                    <Stack spacing={8}>
-                        {data2?.map((item, i) => {
-                            return (
-                                <Stack
-                                    direction={{xs : "column" , sm : "row"}} 
-                                    spacing={{xs : 2 , sm : 12}}
-                                    key={i}
-                                >
-                                    <Typography
-                                        width={"170px"}
-                                        variant="subtitle"
-                                        color={"text.secondary"}
-                                    >
-                                        
-                                        {item.key}
-                                    </Typography>
-                                    <Typography
-                                        width={"250px"}
-                                        variant="subtitle"
-                                    >
-                                        
-                                        {item.value}
-                                    </Typography>
-                                </Stack>
-                            );
-                        })}
-                    </Stack>
-                </Grid>
-            </Grid>
-        </Box>
+            <ConfirmDialog
+                open={confirm}
+                onClose={() => setConfirm(false)}
+                onConfirm={remove}
+                loading={busy}
+                title={`حذف ملف ${patient.name}؟`}
+                message="الملف هيتحذف من كل الفروع. الأفضل تسيبه لو عنده زيارات."
+                confirmLabel="حذف"
+            />
+        </>
     );
 };
 

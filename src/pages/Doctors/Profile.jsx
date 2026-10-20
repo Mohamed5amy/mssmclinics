@@ -1,142 +1,155 @@
-import {
-    Box,
-    Button,
-    Grid,
-    IconButton,
-    Stack,
-    Typography,
-} from "@mui/material";
-import Container from "../../components/Container/Container";
-import Back from "../../components/Back/Back";
-import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import axios from "axios";
-import Popup from "../../components/Popup/Popup";
-import useRole from "../../hooks/Role/useRole";
-// import Table from "../../components/Table/Table";
+import { useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { CalendarClock, CalendarDays, KeyRound, Pencil, Trash2 } from "lucide-react";
+import { Badge, Button, ButtonLink, Card, CardHeader, ConfirmDialog, DataTable, Details, PageHeader, PageLoader, StatCard, useToast } from "../../ui";
+import { errorMessage, post } from "../../lib/api";
+import { useApi } from "../../lib/useApi";
+import { currentUser } from "../../constants/session";
+import { STATUS, money, monthRange, visitBadge } from "../../constants/visits";
+import { weekSummary } from "../../lib/hours";
+import ResetPassword from "../../components/ResetPassword/ResetPassword";
 
+// A doctor's file: details, this month's numbers, and their latest visits.
 const Profile = () => {
-    
     const { id } = useParams();
-    const [admin, setAdmin] = useState({});
-
-    useEffect(() => {
-        axios
-            .get(import.meta.env.VITE_API + "show-doctors/" + id, {
-                headers: {
-                    Authorization: "Bearer " + localStorage.getItem("token"),
-                },
-            })
-            .then((res) => {
-                console.log(res.data.data);
-                setAdmin(res.data.data);
-            })
-            .catch((err) => {
-                console.log(err);
-            });
-    }, [id]);
-
-    // handle delete
-    const [open, setOpen] = useState(false);
     const navigate = useNavigate();
+    const toast = useToast();
+    const owner = currentUser().role === "owner";
 
-    const handleDelete = () => {
-        axios
-            .post(
-                import.meta.env.VITE_API + "delete-doctors" , {id} ,
-                {
-                    headers: {
-                        Authorization:
-                            "Bearer " + localStorage.getItem("token"),
-                    },
-                }
-            )
-            .then((res) => {
+    const { data: doctor, loading } = useApi(`show-doctors/${id}`);
+    const hours = useApi("doctor-schedule", { doctor_id: id });
+    const [confirm, setConfirm] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [resetting, setResetting] = useState(false);
+
+    const month = useMemo(() => {
+        const { start, end } = monthRange();
+        const visits = (doctor?.reservations ?? []).filter((visit) => visit.CustomDate >= start && visit.CustomDate <= end && visit.status !== STATUS.CANCELED);
+        const collected = visits.reduce((sum, visit) => sum + (visit.paid || 0), 0);
+        return { count: visits.length, collected, share: (collected * (doctor?.prectange || 0)) / 100 };
+    }, [doctor]);
+
+    if (loading || !doctor) return <PageLoader />;
+
+    const remove = () => {
+        setBusy(true);
+        post("delete-doctors", { id: +id })
+            .then(() => {
+                toast.success("تم حذف الدكتور");
                 navigate("/doctors-list");
-                console.log(res);
             })
             .catch((err) => {
-                console.log(err);
-            });
+                toast.error(errorMessage(err));
+                setConfirm(false);
+            })
+            .finally(() => setBusy(false));
     };
 
-    const role = useRole()
-    
     return (
-        <Container>
-            {/* Header */}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={{ xs: 4, sm: 0 }} justifyContent={"space-between"} alignItems={"center"}>
-                <Back title={"بيانات الطبيب"} />
-                {role === 3 && <Link onClick={() =>localStorage.setItem("admin_edit_data", JSON.stringify(admin))} to={"/doctors-list/edit/" + admin?.id}>
-                    <Button sx={{ p: "16px 40px", borderRadius: "8px" }} variant="contained">تعديل الملف الشخصي</Button>
-                </Link>}
-            </Stack>
-            {/* Box Content */}
-            <AdminData admin={admin} setOpen={setOpen} />
-            {/* Popup */}
-            <Popup open={open} setOpen={setOpen} message={"هل انت متأكد انك تريد حذف هذا الطبيب ؟"} type="delete" fn={handleDelete} />
-        </Container>
-    );
-};
+        <>
+            <PageHeader
+                title={doctor.name}
+                subtitle={doctor.specializeName}
+                back="/doctors-list"
+                actions={
+                    owner && (
+                        <>
+                            <ButtonLink to={`/doctors-list/edit/${id}`} variant="secondary" icon={Pencil}>تعديل</ButtonLink>
+                            <Button variant="secondary" icon={KeyRound} onClick={() => setResetting(true)}>كلمة المرور</Button>
+                            <Button variant="danger-ghost" icon={Trash2} onClick={() => setConfirm(true)}>حذف</Button>
+                        </>
+                    )
+                }
+            />
 
-const AdminData = ({ admin, setOpen }) => {
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <StatCard label="كشوفات الشهر" value={month.count} icon={CalendarDays} />
+                <StatCard label="المحصّل هذا الشهر" value={money(month.collected)} tone="green" />
+                <StatCard label="نسبته هذا الشهر" value={money(month.share)} tone="violet" hint={`${doctor.prectange}% من المدفوع`} />
+            </div>
 
-    const data = [
-        {
-            key: "الاسم :",
-            value: admin?.name,
-        },
-        {
-            key: "رقم الهاتف :",
-            value: admin?.phone,
-        },
-        {
-            key: "الايميل :",
-            value: admin?.email,
-        },
-        {
-            key: "التخصص :",
-            value: admin?.specializeName,
-        },
-        {
-            key: "النسبة :",
-            value: admin?.prectange + " %",
-        },
-    ];
+            <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader title="البيانات" />
+                        <div className="p-5">
+                            <Details
+                                columns={1}
+                                items={[
+                                    { label: "الهاتف", value: <span className="ltr-nums">{doctor.phone}</span> },
+                                    { label: "الايميل", value: <span className="ltr-nums">{doctor.email}</span> },
+                                    {
+                                        label: "الفروع",
+                                        value: (
+                                            <div className="flex flex-wrap gap-1">
+                                                {doctor.clinicNames.split("، ").filter(Boolean).map((name) => <Badge key={name} tone="blue">{name}</Badge>)}
+                                            </div>
+                                        ),
+                                    },
+                                    { label: "النسبة", value: `${doctor.prectange}%` },
+                                    { label: "المجموعة", value: doctor.groupName, hidden: !doctor.groupName || owner },
+                                ]}
+                            />
+                        </div>
+                    </Card>
+                    <Card>
+                        <CardHeader
+                            title="المواعيد"
+                            actions={
+                                <ButtonLink to={`/schedules?doctor_id=${id}`} variant="ghost" size="sm" icon={CalendarClock}>
+                                    {owner ? "تعديل" : "التقويم"}
+                                </ButtonLink>
+                            }
+                        />
+                        <div className="space-y-4 p-5">
+                            {hours.data?.map((branch) => (
+                                <div key={branch.clinic_id}>
+                                    <p className="text-sm font-medium text-slate-900">
+                                        {branch.clinicName}
+                                        <span className="font-normal text-slate-500"> · كل كشف {branch.slot_minutes} دقيقة</span>
+                                    </p>
+                                    {branch.hours.length ? (
+                                        weekSummary(branch.hours).map((line) => (
+                                            <p key={line.days} className="mt-1 text-sm text-slate-600">
+                                                <span className="text-slate-500">{line.days}:</span> {line.hours}
+                                            </p>
+                                        ))
+                                    ) : (
+                                        <p className="mt-1 text-sm text-amber-700">ملوش مواعيد هنا لسه</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
+                </div>
+                <Card className="lg:col-span-2">
+                    <CardHeader title="آخر الكشوفات" />
+                    <DataTable
+                        rows={doctor.reservations.slice(0, 15)}
+                        rowLink={(row) => `/reservations-list/${row.id}`}
+                        empty="لسه مفيش كشوفات"
+                        columns={[
+                            { key: "CustomDate", header: "التاريخ" },
+                            { key: "name", header: "المريض", render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
+                            { key: "clinicName", header: "الفرع" },
+                            { key: "status", header: "الحالة", render: (row) => <Badge tone={visitBadge(row).tone}>{visitBadge(row).name}</Badge> },
+                            { key: "paid", header: "المدفوع", render: (row) => money(row.paid) },
+                        ]}
+                    />
+                </Card>
+            </div>
 
-    const role = useRole()
-
-    return (
-        <Box bgcolor={"primary.white"} p={"32px 16px"} borderRadius={"12px"} mt={8}>
-            {/* Name && Icons */}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={{ xs: 4, sm: 0 }} justifyContent={"space-between"} pb={8} mb={12} borderBottom={"1px solid"} borderColor={"primary.border"}>
-                {/* Name */}
-                <Stack spacing={4}>
-                    <Typography variant="h3"> {admin?.name} </Typography>
-                    <Typography variant="body"> {admin?.email} </Typography>
-                </Stack>
-                {/* Icons */}
-                {(role == 3 || role == 1) && <Stack spacing={4} direction={"row"} alignItems={"center"}>
-                    <IconButton color="error" onClick={() => setOpen(true)}><DeleteOutlineRoundedIcon /></IconButton>
-                </Stack>}
-            </Stack>
-            {/* Profile Data */}
-            <Grid container>
-                <Grid item xs={12} md={6}>
-                    <Stack spacing={8}>
-                        {data?.map((item, i) => {
-                            return (
-                                <Stack direction={{xs : "column" , sm : "row"}} spacing={{xs : 2 , sm : 12}} key={i}> 
-                                    <Typography width={"150px"} variant="subtitle" color={"text.secondary"}>{item.key}</Typography>
-                                    <Typography width={"250px"} variant="subtitle">{item.value}</Typography>
-                                </Stack>
-                            );
-                        })}
-                    </Stack>
-                </Grid>
-            </Grid>
-        </Box>
+            <ConfirmDialog
+                open={confirm}
+                onClose={() => setConfirm(false)}
+                onConfirm={remove}
+                loading={busy}
+                title="حذف الدكتور؟"
+                message="مش هيقدر يدخل تاني. كشوفاته القديمة بتفضل محفوظة. لو عنده حجوزات جاية لازم تتنقل او تتلغي الاول."
+                confirmLabel="حذف"
+            />
+            {resetting && <ResetPassword name={doctor.name} id={doctor.id} endpoint="update-doctor-password" onClose={() => setResetting(false)} />}
+        </>
     );
 };
 

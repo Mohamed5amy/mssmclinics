@@ -1,456 +1,171 @@
-import { Box, Button, Grid, MenuItem, Stack, TextField, Typography } from "@mui/material";
-import Back from "../../components/Back/Back";
-import Container from "../../components/Container/Container";
-import { useForm } from "react-hook-form";
 import { useEffect, useState } from "react";
-import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import Input from "../../components/Input/Input";
-import useRole from "../../hooks/Role/useRole";
+import { Alert, Button, Card, CardBody, CardHeader, Checkbox, Field, Input, PageHeader, PageLoader, Segmented, Select, useToast } from "../../ui";
+import { errorMessage, fieldErrors, get, post } from "../../lib/api";
+import { useApi } from "../../lib/useApi";
+import { currentUser } from "../../constants/session";
+import { BOOKING_TYPES, STATUS, STATUSES, money, todayString } from "../../constants/visits";
+import { dayTitle, formatTime } from "../../lib/hours";
+import PatientPicker from "../../components/Patients/PatientPicker";
+import SlotPicker from "../../components/Schedule/SlotPicker";
 
-
-const Clients_Edit = () => {
-
-    const {id} = useParams()
-
-    const data = JSON.parse(localStorage.getItem("admin_edit_data"))
-
-    // USE FORM
-    const {
-        register,
-        handleSubmit,
-        formState: { errors },
-    } = useForm();
-
-
-    // Loading
-    const [loading, setLoading] = useState(false);
-
+// Changing a booking at the desk. The branch stays; moving the day, time or
+// doctor takes a free slot in the doctor's hours and gives a new turn there,
+// and the re-visit price is worked out again.
+const Edit = () => {
+    const { id } = useParams();
     const navigate = useNavigate();
+    const toast = useToast();
+    const owner = currentUser().role === "owner";
 
-    // Error
-    // const [error, setError] = useState({});
+    const [form, setForm] = useState(null);
+    const [visit, setVisit] = useState(null);
+    const [errors, setErrors] = useState({});
+    const [saving, setSaving] = useState(false);
+    const [override, setOverride] = useState(false);
+    const [refresh, setRefresh] = useState(0);
 
-    const role = useRole();
+    useEffect(() => {
+        get(`show-reservation/${id}`).then((row) => {
+            setVisit(row);
+            setForm({
+                patient_id: row.patient_id,
+                doctor_id: row.doctor_id,
+                service_id: row.service_id,
+                status: row.status,
+                date: row.CustomDate,
+                time: row.time || "",
+                booking_type: row.booking_type,
+                discount: row.discount ?? 0,
+            });
+        });
+    }, [id]);
 
-    // Handle Submit
-    const onSubmit = (data) => {
-        
-        data.id = id
-        
-        console.log(data)
+    const patients = useApi("list-patients");
+    const doctors = useApi(visit ? "list-doctors" : null, { clinic_id: visit?.clinic_id });
+    const services = useApi("services");
 
-        setLoading(true);
+    if (!form) return <PageLoader />;
 
-        axios
-            .post(import.meta.env.VITE_API + (role == 3 ? "clinic/edit-reservation" : "doctor/update-reservations") , data, {
-                headers: {
-                    Authorization: "Bearer " + localStorage.getItem("token"),
-                },
-            })
-            .then((res) => {
-                navigate("/reservations-list/" + res.data.data.id);
+    const set = (key) => (value) => setForm((current) => ({ ...current, [key]: value?.target ? value.target.value : value }));
+    // An upcoming visit can move to another free slot; a past one keeps its day.
+    const movable = visit.status === STATUS.PENDING && visit.CustomDate >= todayString();
+
+    const submit = (e) => {
+        e.preventDefault();
+        if (movable && !override && !form.time) {
+            setErrors({ time: "اختر الميعاد" });
+            return;
+        }
+        setSaving(true);
+        post("clinic/edit-reservation", {
+            ...form,
+            id: +id,
+            doctor_id: +form.doctor_id,
+            service_id: +form.service_id,
+            discount: +form.discount || 0,
+            ...(override ? { override_hours: true } : {}),
+        })
+            .then(() => {
+                toast.success("تم حفظ التعديلات");
+                navigate(`/reservations-list/${id}`);
             })
             .catch((err) => {
-                console.log(err.response.data.message);
-                // setError(err?.response?.data?.message);
+                setErrors(fieldErrors(err));
+                toast.error(errorMessage(err));
+                if (err?.response?.data?.code === "SLOT_TAKEN") {
+                    setForm((current) => ({ ...current, time: "" }));
+                    setRefresh((count) => count + 1);
+                }
             })
-            .finally(() => {
-                setLoading(false);
-            });
+            .finally(() => setSaving(false));
     };
 
-
-    // Get Clients
-    const [clients, setClients] = useState([]);
-    const [ayHaga, setAyHaga] = useState(false);
-
-    useEffect(() => {
-        role === 3 && axios
-            .get(import.meta.env.VITE_API + "list-patients", {
-                headers: {
-                    Authorization: "Bearer " + localStorage.getItem("token"),
-                },
-            })
-            .then((res) => {
-                setClients(res.data.data);
-                console.log(res.data.data);
-            })
-            .catch((err) => {
-                console.log(err.response.data);
-            });
-    }, [role]);
-
-    // Get Clients
-    const [doctors, setDoctors] = useState([]);
-    const [ayHaga2, setAyHaga2] = useState(false);
-
-    useEffect(() => {
-        role === 3 && axios
-            .get(import.meta.env.VITE_API + "list-doctors", {
-                headers: {
-                    Authorization: "Bearer " + localStorage.getItem("token"),
-                },
-            })
-            .then((res) => {
-                setDoctors(res.data.data);
-                console.log(res.data.data);
-            })
-            .catch((err) => {
-                console.log(err.response.data);
-            });
-    }, [role]);
-
-
-    // Services
-    const [services, setServices] = useState([]);
-    const [ayHaga3, setAyHaga3] = useState(false);
-    const [ayHaga4, setAyHaga4] = useState(false);
-
-    useEffect(() => {
-        role === 3 && axios
-            .get(import.meta.env.VITE_API + "services", {
-                headers: {
-                    Authorization: "Bearer " + localStorage.getItem("token"),
-                },
-            })
-            .then((res) => {
-                setServices(res.data.data);
-                console.log(res.data.data);
-            })
-            .catch((err) => {
-                console.log(err.response.data);
-            });
-    }, [role]);
-
     return (
-        <>
-            <Container>
-                {/* Back */}
-                <Back title={"تعديل الحالة"} />
-                {/* Client Data */}
-                <Box
-                    bgcolor={"primary.white"}
-                    p={"32px 16px"}
-                    borderRadius={"12px"}
-                    my={8}
-                >
-                    <Typography variant="title" fontWeight={"500"}>
-                        بيانات الحالة
-                    </Typography>
-                    {role === 3 && <Grid container mt={8} spacing={8} mb={8}>
-                        <Grid item xs={12} sm={4}>
-                            <Stack alignItems={"start"} spacing={4}>
-                                <Typography
-                                    variant="label"
-                                    color={"text.secondary"}
-                                >
-                                    {" "}
-                                    المريض{" "}
-                                    <span style={{ color: "red" }}>*</span>{" "}
-                                </Typography>
+        <form onSubmit={submit} className="max-w-3xl">
+            <PageHeader title={`تعديل الكشف #${id}`} subtitle={`${visit.clinicName} · دور ${visit.queue_number}`} back />
 
-                                <TextField
-                                    {...register("patient_id", {
-                                        required: "This Field is required",
-                                    })}
-                                    fullWidth
-                                    select
-                                    error={
-                                        errors.patient_id && !ayHaga
-                                            ? true
-                                            : false
-                                    }
-                                    color="primary"
-                                    sx={{
-                                        borderRadius: "8px !important",
-                                        border: "1px solid",
-                                        borderColor: "primary.border",
-                                        bgcolor: "#eceff9",
-                                    }}
-                                    defaultValue={data?.patient_id || ""}
-                                    onChange={() => setAyHaga(true)}
-                                >
-                                    {clients &&
-                                        clients.map((item) => {
-                                            return (
-                                                <MenuItem
-                                                    value={item.id}
-                                                    key={item.id}
-                                                >
-                                                    {" "}
-                                                    {item.name}{" "}
-                                                </MenuItem>
-                                            );
-                                        })}
-                                </TextField>
-
-                                {errors?.patient_id?.message && !ayHaga && (
-                                    <Stack
-                                        direction={"row"}
-                                        alignItems={"center"}
-                                        spacing={4}
-                                    >
-                                        <ErrorOutlineIcon
-                                            sx={{ color: "red" }}
-                                        />
-                                        <Typography
-                                            color={"red"}
-                                            fontSize={"14px"}
-                                            fontWeight={"500"}
-                                        >
-                                            {" "}
-                                            {errors.patient_id.message}{" "}
-                                        </Typography>
-                                    </Stack>
-                                )}
-                            </Stack>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Stack alignItems={"start"} spacing={4}>
-                                <Typography
-                                    variant="label"
-                                    color={"text.secondary"}
-                                >
-                                    {" "}
-                                    الطبيب{" "}
-                                    <span style={{ color: "red" }}>*</span>{" "}
-                                </Typography>
-
-                                <TextField
-                                    {...register("doctor_id", {
-                                        required: "This Field is required",
-                                    })}
-                                    fullWidth
-                                    select
-                                    error={
-                                        errors.doctor_id && !ayHaga2
-                                            ? true
-                                            : false
-                                    }
-                                    color="primary"
-                                    sx={{
-                                        borderRadius: "8px !important",
-                                        border: "1px solid",
-                                        borderColor: "primary.border",
-                                        bgcolor: "#eceff9",
-                                    }}
-                                    defaultValue={data?.doctor_id || ""}
-                                    onChange={() => setAyHaga2(true)}
-                                >
-                                    {doctors &&
-                                        doctors.map((item) => {
-                                            return (
-                                                <MenuItem
-                                                    value={item.id}
-                                                    key={item.id}
-                                                >
-                                                    {" "}
-                                                    {item.name}{" "}
-                                                </MenuItem>
-                                            );
-                                        })}
-                                </TextField>
-
-                                {errors?.doctor_id?.message && !ayHaga2 && (
-                                    <Stack
-                                        direction={"row"}
-                                        alignItems={"center"}
-                                        spacing={4}
-                                    >
-                                        <ErrorOutlineIcon
-                                            sx={{ color: "red" }}
-                                        />
-                                        <Typography
-                                            color={"red"}
-                                            fontSize={"14px"}
-                                            fontWeight={"500"}
-                                        >
-                                            {" "}
-                                            {errors.doctor_id.message}{" "}
-                                        </Typography>
-                                    </Stack>
-                                )}
-                            </Stack>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Stack alignItems={"start"} spacing={4}>
-                                <Typography
-                                    variant="label"
-                                    color={"text.secondary"}
-                                >
-                                    {" "}
-                                    الخدمة{" "}
-                                    <span style={{ color: "red" }}>*</span>{" "}
-                                </Typography>
-
-                                <TextField
-                                    {...register("service_id", {
-                                        required: "This Field is required",
-                                    })}
-                                    fullWidth
-                                    select
-                                    error={
-                                        errors.service_id && !ayHaga3
-                                            ? true
-                                            : false
-                                    }
-                                    color="primary"
-                                    sx={{
-                                        borderRadius: "8px !important",
-                                        border: "1px solid",
-                                        borderColor: "primary.border",
-                                        bgcolor: "#eceff9",
-                                    }}
-                                    defaultValue={data?.service_id || ""}
-                                    onChange={() => setAyHaga3(true)}
-                                >
-                                    {services &&
-                                        services.map((item) => {
-                                            return (
-                                                <MenuItem
-                                                    value={item.id}
-                                                    key={item.id}
-                                                >
-                                                    {" "}
-                                                    {item.name}{" "}
-                                                </MenuItem>
-                                            );
-                                        })}
-                                </TextField>
-
-                                {errors?.service_id?.message && !ayHaga3 && (
-                                    <Stack
-                                        direction={"row"}
-                                        alignItems={"center"}
-                                        spacing={4}
-                                    >
-                                        <ErrorOutlineIcon
-                                            sx={{ color: "red" }}
-                                        />
-                                        <Typography
-                                            color={"red"}
-                                            fontSize={"14px"}
-                                            fontWeight={"500"}
-                                        >
-                                            {" "}
-                                            {errors.service_id.message}{" "}
-                                        </Typography>
-                                    </Stack>
-                                )}
-                            </Stack>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Stack alignItems={"start"} spacing={4}>
-                                <Typography
-                                    variant="label"
-                                    color={"text.secondary"}
-                                >
-                                    {" "}
-                                    حالة الكشف{" "}
-                                    <span style={{ color: "red" }}>*</span>{" "}
-                                </Typography>
-
-                                <TextField
-                                    {...register("status", {
-                                        required: "This Field is required",
-                                    })}
-                                    fullWidth
-                                    select
-                                    error={
-                                        errors.status && !ayHaga4
-                                            ? true
-                                            : false
-                                    }
-                                    color="primary"
-                                    sx={{
-                                        borderRadius: "8px !important",
-                                        border: "1px solid",
-                                        borderColor: "primary.border",
-                                        bgcolor: "#eceff9",
-                                    }}
-                                    defaultValue={data?.status}
-                                    onChange={() => setAyHaga4(true)}
-                                >
-                                    <MenuItem value={"ملغي"}>
-                                        ملغي
-                                    </MenuItem>
-                                    <MenuItem value={"فى الانتظار"}>
-                                        فى الانتظار
-                                    </MenuItem>
-                                    <MenuItem value={"مكتمل"}>
-                                        مكتمل
-                                    </MenuItem>
-                                </TextField>
-
-                                {errors?.status?.message && !ayHaga4 && (
-                                    <Stack
-                                        direction={"row"}
-                                        alignItems={"center"}
-                                        spacing={4}
-                                    >
-                                        <ErrorOutlineIcon
-                                            sx={{ color: "red" }}
-                                        />
-                                        <Typography
-                                            color={"red"}
-                                            fontSize={"14px"}
-                                            fontWeight={"500"}
-                                        >
-                                            {" "}
-                                            {errors.status.message}{" "}
-                                        </Typography>
-                                    </Stack>
-                                )}
-                            </Stack>
-                        </Grid>
-                    </Grid>}
-                    {(role === 4 || role === 3) && <Stack mt={8}>
-                        <Input
-                            type={"text"}
-                            label={"التشخيص"}
-                            register={register}
-                            registerName="Diagnosis"
-                            defaultValue={data?.Diagnosis}
-                            error={errors?.Diagnosis?.message}
-                            multiline={true}
+            <Card>
+                <CardHeader title="الكشف" />
+                <CardBody className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <Field label="المريض" required error={errors.patient_id} className="sm:col-span-2">
+                        <PatientPicker
+                            patients={patients.data}
+                            value={form.patient_id}
+                            onChange={set("patient_id")}
+                            onCreated={(patient) => patients.setData((list) => [...(list ?? []), patient])}
                         />
-                    </Stack>}
-                </Box>
-                {/* Submit */}
-                <Submit
-                    onSubmit={onSubmit}
-                    handleSubmit={handleSubmit}
-                    loading={loading}
-                />
-            </Container>
-        </>
+                    </Field>
+                    <Field label="الدكتور" required error={errors.doctor_id}>
+                        <Select value={form.doctor_id} onChange={(e) => setForm((current) => ({ ...current, doctor_id: e.target.value, time: "" }))}>
+                            {doctors.data?.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.name}</option>)}
+                        </Select>
+                    </Field>
+                    <Field label="الخدمة" required error={errors.service_id}>
+                        <Select value={form.service_id} onChange={set("service_id")}>
+                            {services.data?.map((service) => <option key={service.id} value={service.id}>{service.name} · {money(service.price)}</option>)}
+                        </Select>
+                    </Field>
+                    <div className="sm:col-span-2">
+                        <p className="mb-1.5 text-sm font-medium text-slate-700">الحالة</p>
+                        <Segmented options={STATUSES} value={form.status} onChange={set("status")} />
+                    </div>
+                </CardBody>
+            </Card>
+
+            <Card className="mt-6">
+                <CardHeader title="الموعد" description={movable ? "اختر ميعاد فاضي من مواعيد الدكتور عشان تنقل الكشف" : undefined} />
+                <CardBody className="space-y-4">
+                    {!movable ? (
+                        <p className="text-sm text-slate-700">
+                            {dayTitle(form.date)}{form.time && ` · ${formatTime(form.time)}`}
+                        </p>
+                    ) : override ? (
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <Field label="اليوم" required error={errors.date}>
+                                <Input type="date" value={form.date} onChange={set("date")} />
+                            </Field>
+                            <Field label="الساعة" error={errors.time}>
+                                <Input type="time" value={form.time} onChange={set("time")} />
+                            </Field>
+                        </div>
+                    ) : (
+                        <SlotPicker
+                            doctorId={+form.doctor_id}
+                            clinicId={visit.clinic_id}
+                            value={{ date: form.date, time: form.time }}
+                            onChange={(value) => setForm((current) => ({ ...current, ...value }))}
+                            exclude={+id}
+                            refresh={refresh}
+                        />
+                    )}
+                    {movable && !override && (errors.time || errors.date) && <p className="text-xs font-medium text-red-600">{errors.time || errors.date}</p>}
+                    {movable && owner && <Checkbox checked={override} onChange={setOverride} label="برة مواعيد الدكتور (للحالات الطارئة)" />}
+                </CardBody>
+            </Card>
+
+            <Card className="mt-6">
+                <CardHeader title="الحساب" />
+                <CardBody className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <div>
+                        <p className="mb-1.5 text-sm font-medium text-slate-700">نوع الحجز</p>
+                        <Segmented options={BOOKING_TYPES} value={form.booking_type} onChange={set("booking_type")} />
+                    </div>
+                    <Field label="خصم (جنيه)" error={errors.discount}>
+                        <Input type="number" min={0} value={form.discount} onChange={set("discount")} invalid={!!errors.discount} />
+                    </Field>
+                    <Alert tone="info" className="sm:col-span-2">
+                        رقم الدور بيمشي بالميعاد، فتغيير اليوم او الساعة او الدكتور بيغيّر رقم الدور، وسعر الإعادة بيتحسب تاني. المدفوعات بتتسجل من صفحة الكشف.
+                    </Alert>
+                </CardBody>
+            </Card>
+
+            <div className="mt-6 flex gap-3">
+                <Button type="submit" loading={saving}>حفظ</Button>
+                <Button variant="secondary" onClick={() => navigate(-1)}>الغاء</Button>
+            </div>
+        </form>
     );
 };
 
-const Submit = ({ onSubmit, handleSubmit, loading }) => {
-    return (
-        <Stack direction={{xs : "column" , sm : "row"}} spacing={12} justifyContent={"end"} my={20}>
-            <Button
-                variant="outlined"
-                sx={{ p: "16px 80px", borderRadius: "8px" }}
-                onClick={() => history.back()}
-            >
-                {" "}
-                الغاء{" "}
-            </Button>
-            <Button
-                variant="contained"
-                sx={{ p: "16px 80px", borderRadius: "8px" }}
-                onClick={handleSubmit(onSubmit)}
-                disabled={loading}
-            >
-                {" "}
-                حفظ{" "}
-            </Button>
-        </Stack>
-    );
-};
-
-export default Clients_Edit;
+export default Edit;
