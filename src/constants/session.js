@@ -6,6 +6,12 @@ export const saveSession = (user) => {
     localStorage.setItem("isSuper", user.is_super);
 };
 
+// After changing your own password: the fresh token keeps this device signed in.
+export const updateToken = (token) => {
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify({ ...currentUser(), api_token: token }));
+};
+
 export const currentUser = () => {
     try {
         return JSON.parse(localStorage.getItem("user")) || {};

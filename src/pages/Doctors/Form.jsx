@@ -5,6 +5,7 @@ import { Button, Card, CardBody, CardHeader, Field, Input, PageHeader, PageLoade
 import { errorMessage, fieldErrors, get, post } from "../../lib/api";
 import { useApi } from "../../lib/useApi";
 import BranchPicker from "../../components/BranchPicker/BranchPicker";
+import { PASSWORD_HINT, validPassword } from "../../lib/password";
 
 // A doctor of the owner's group and the branches they work at.
 const Form = () => {
@@ -90,8 +91,8 @@ const Form = () => {
                         <Input type="email" dir="ltr" invalid={!!error("email")} {...register("email", { required: "ادخل الايميل" })} />
                     </Field>
                     {!editing && (
-                        <Field label="كلمة المرور" required error={error("password")} hint="6 خانات على الاقل">
-                            <Input type="password" dir="ltr" invalid={!!error("password")} {...register("password", { required: "ادخل كلمة المرور", minLength: { value: 6, message: "6 خانات على الاقل" } })} />
+                        <Field label="كلمة المرور" required error={error("password")} hint={PASSWORD_HINT}>
+                            <Input type="password" dir="ltr" invalid={!!error("password")} {...register("password", { required: "ادخل كلمة المرور", validate: validPassword })} />
                         </Field>
                     )}
                 </CardBody>

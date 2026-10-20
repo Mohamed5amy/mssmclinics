@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { CalendarCheck2, Eye, EyeOff, ListOrdered, Wallet } from "lucide-react";
 import logo from "../../images/text.svg";
 import { Alert, Button, Field, Input } from "../../ui";
-import { OFFLINE, post } from "../../lib/api";
+import { OFFLINE, errorMessage, post } from "../../lib/api";
 import { homeFor } from "../../constants/roles";
 import { saveSession } from "../../constants/session";
 
@@ -14,6 +14,7 @@ const REASONS = {
     suspended: "تم إيقاف حساب المجموعة. تواصل مع إدارة المنصة",
     closed: "هذا الفرع مغلق حالياً",
     expired: "انتهت الجلسة، سجل الدخول مرة اخري",
+    password: "كلمة المرور اتغيرت، ادخل بالكلمة الجديدة",
 };
 
 const FEATURES = [
@@ -54,7 +55,8 @@ const Login = () => {
                     !err?.response ? OFFLINE
                         : code === "GROUP_SUSPENDED" ? REASONS.suspended
                             : code === "BRANCH_CLOSED" ? REASONS.closed
-                                : "الايميل او كلمة المرور غير صحيحة",
+                                : code === "TOO_MANY_ATTEMPTS" ? errorMessage(err)
+                                    : "الايميل او كلمة المرور غير صحيحة",
                 );
             })
             .finally(() => setLoading(false));
@@ -113,6 +115,9 @@ const Login = () => {
                             دخول
                         </Button>
                     </form>
+                    <p className="mt-6 text-center text-sm text-slate-500">
+                        نسيت كلمة المرور؟ صاحب العيادة يقدر يغيّرهالك، ولو انت صاحب المجموعة كلّم إدارة MSSM.
+                    </p>
                 </div>
             </div>
 

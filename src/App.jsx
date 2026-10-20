@@ -28,6 +28,7 @@ import Schedules from "./pages/Schedules/Schedules";
 import Cash from "./pages/Cash/Cash";
 import Reminders from "./pages/Reminders/Reminders";
 import Statement from "./pages/Statement/Statement";
+import Activity from "./pages/Activity/Activity";
 import Settings from "./pages/Settings/Settings";
 
 // Pages only some accounts may open (by the role name the API returns);
@@ -64,6 +65,7 @@ function App() {
                         >
                             <Route element={<RequireRole roles={MANAGEMENT} />}>
                                 <Route path="/insights" element={<Insights />} />
+                                <Route path="/activity" element={<Activity />} />
                                 <Route path="/clinics-list" element={<Clinics_List />} />
                                 <Route path="/clinics-list/:id" element={<Clinics_Profile />} />
                                 <Route path="/doctors-list" element={<Doctors_List />} />

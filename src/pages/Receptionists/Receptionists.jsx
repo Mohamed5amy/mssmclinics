@@ -7,6 +7,7 @@ import { useApi } from "../../lib/useApi";
 import { currentUser } from "../../constants/session";
 import BranchPicker from "../../components/BranchPicker/BranchPicker";
 import ResetPassword from "../../components/ResetPassword/ResetPassword";
+import { PASSWORD_HINT, validPassword } from "../../lib/password";
 
 // Front-desk accounts, one branch each. They sign in on the same page, register
 // patients, book and take payments, and never see income, settings, doctors'
@@ -163,8 +164,8 @@ const ReceptionistForm = ({ receptionist, onClose, onSaved }) => {
                     <Input type="email" dir="ltr" invalid={!!error("email")} {...register("email", { required: "ادخل الايميل" })} />
                 </Field>
                 {!editing && (
-                    <Field label="كلمة المرور" required error={error("password")} hint="6 خانات على الاقل">
-                        <Input type="password" dir="ltr" invalid={!!error("password")} {...register("password", { required: "ادخل كلمة المرور", minLength: { value: 6, message: "6 خانات على الاقل" } })} />
+                    <Field label="كلمة المرور" required error={error("password")} hint={PASSWORD_HINT}>
+                        <Input type="password" dir="ltr" invalid={!!error("password")} {...register("password", { required: "ادخل كلمة المرور", validate: validPassword })} />
                     </Field>
                 )}
                 <BranchPicker value={clinicId} onChange={setClinicId} error={error("clinic_id")} hint={editing ? "تغيير الفرع بينقله فوراً" : undefined} />

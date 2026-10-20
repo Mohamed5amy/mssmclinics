@@ -1,14 +1,17 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import { KeyRound, LogOut } from "lucide-react";
 import { clsx } from "clsx";
 import logo from "../images/text.svg";
 import { currentUser } from "../constants/session";
 import { ROLE_LABELS, navFor } from "./nav";
+import ChangePassword from "../components/ChangePassword/ChangePassword";
 
 // The menu column: logo, the role's pages, and who is signed in.
 export const SidebarContent = ({ onNavigate, onSignOut }) => {
     const user = currentUser();
     const place = [user.groupName, user.clinicName].filter(Boolean).join(" · ");
+    const [changing, setChanging] = useState(false);
 
     return (
         <div className="flex h-full flex-col">
@@ -53,6 +56,14 @@ export const SidebarContent = ({ onNavigate, onSignOut }) => {
                     </div>
                     <button
                         type="button"
+                        onClick={() => setChanging(true)}
+                        title="تغيير كلمة المرور"
+                        className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                    >
+                        <KeyRound className="h-[18px] w-[18px]" />
+                    </button>
+                    <button
+                        type="button"
                         onClick={onSignOut}
                         title="تسجيل الخروج"
                         className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
@@ -61,6 +72,7 @@ export const SidebarContent = ({ onNavigate, onSignOut }) => {
                     </button>
                 </div>
             </div>
+            {changing && <ChangePassword onClose={() => setChanging(false)} />}
         </div>
     );
 };

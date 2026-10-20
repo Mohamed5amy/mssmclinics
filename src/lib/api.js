@@ -12,7 +12,7 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-const REASONS = { GROUP_SUSPENDED: "suspended", BRANCH_CLOSED: "closed" };
+const REASONS = { GROUP_SUSPENDED: "suspended", BRANCH_CLOSED: "closed", PASSWORD_CHANGED: "password" };
 
 api.interceptors.response.use(
     (response) => response,
@@ -53,7 +53,10 @@ const MESSAGES = {
     "Suspend this group before deleting it": "اوقف المجموعة الاول قبل حذفها",
     "This branch has visits - close it instead of deleting it": "الفرع عنده كشوفات، اقفله بدل ما تحذفه",
     "The password confirmation does not match": "تأكيد كلمة المرور غير مطابق",
-    "Password must be at least 6 characters": "كلمة المرور 6 خانات على الاقل",
+    "Password must be at least 8 characters, with letters and numbers": "كلمة المرور 8 خانات على الاقل، فيها حروف وأرقام",
+    "The current password is not correct": "كلمة المرور الحالية غلط",
+    "The new password is the same as the current one": "كلمة المرور الجديدة زي القديمة",
+    "Please enter your current password": "ادخل كلمة المرور الحالية",
     "Please choose a time": "اختر الميعاد",
     "This time is outside the doctor's hours": "الميعاد ده برة مواعيد الدكتور",
     "The doctor doesn't work at this branch on this day": "الدكتور مش موجود في الفرع ده اليوم ده",
@@ -84,6 +87,8 @@ const arabic = (message) => MESSAGES[message] ?? message;
 
 // Codes whose message depends on what the API says it is about.
 const CODED = {
+    // Too many wrong passwords for this email
+    TOO_MANY_ATTEMPTS: ({ minutes }) => `محاولات كتير غلط. استنى ${minutes ?? 15} دقيقة وجرب تاني`,
     // "The doctor already works at another branch at this time"
     HOURS_CLASH: ({ clinic, weekday, date }) =>
         `الدكتور عنده مواعيد في ${clinic || "فرع تاني"} ${date ? dayTitle(date) : `يوم ${DAY_NAMES[weekday]}`} في نفس الوقت`,

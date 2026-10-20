@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, Field, Input, Modal, useToast } from "../../ui";
 import { errorMessage, post } from "../../lib/api";
+import { PASSWORD_HINT, passwordProblem } from "../../lib/password";
 
 // Sets a new password for someone else's account: a group owner (platform),
 // a doctor or a receptionist (group owner). `endpoint` is the API route.
@@ -12,7 +13,8 @@ const ResetPassword = ({ name, id, endpoint, onClose }) => {
     const [saving, setSaving] = useState(false);
 
     const save = () => {
-        if (password.length < 6) return setError("كلمة المرور 6 خانات على الاقل");
+        const weak = passwordProblem(password);
+        if (weak) return setError(weak);
         if (password !== confirmation) return setError("كلمتا المرور غير متطابقتين");
 
         setSaving(true);
@@ -31,7 +33,7 @@ const ResetPassword = ({ name, id, endpoint, onClose }) => {
             onClose={onClose}
             size="sm"
             title="تغيير كلمة المرور"
-            description={name}
+            description={`${name} · هيخرج من كل الأجهزة اللي داخل منها`}
             footer={
                 <>
                     <Button variant="secondary" onClick={onClose}>الغاء</Button>
@@ -40,7 +42,7 @@ const ResetPassword = ({ name, id, endpoint, onClose }) => {
             }
         >
             <div className="space-y-4">
-                <Field label="كلمة المرور الجديدة">
+                <Field label="كلمة المرور الجديدة" hint={PASSWORD_HINT}>
                     <Input type="password" dir="ltr" value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }} autoFocus />
                 </Field>
                 <Field label="تأكيد كلمة المرور" error={error}>

@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button, Card, CardBody, CardHeader, Field, Input, PageHeader, PageLoader, useToast } from "../../ui";
 import { errorMessage, fieldErrors, get, post } from "../../lib/api";
+import { PASSWORD_HINT, validPassword } from "../../lib/password";
 
 // A new group and the owner account that will run it, or editing them.
 // The password of an existing owner is reset from the group's page.
@@ -76,8 +77,8 @@ const Form = () => {
                         <Input type="email" dir="ltr" invalid={!!error("owner_email")} {...register("owner_email", { required: "ادخل الايميل" })} />
                     </Field>
                     {!editing && (
-                        <Field label="كلمة المرور" required error={error("owner_password")} hint="6 خانات على الاقل">
-                            <Input type="password" dir="ltr" invalid={!!error("owner_password")} {...register("owner_password", { required: "ادخل كلمة المرور", minLength: { value: 6, message: "6 خانات على الاقل" } })} />
+                        <Field label="كلمة المرور" required error={error("owner_password")} hint={PASSWORD_HINT}>
+                            <Input type="password" dir="ltr" invalid={!!error("owner_password")} {...register("owner_password", { required: "ادخل كلمة المرور", validate: validPassword })} />
                         </Field>
                     )}
                 </CardBody>
