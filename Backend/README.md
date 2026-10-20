@@ -77,6 +77,7 @@ today's queue, missed two bookings and Karim Waleed one. The owner paid Karim
 | `JWT_SECRET`     | change this before deploying              |
 | `JWT_EXPIRES_IN` | `7d`                                      |
 | `CORS_ORIGIN`    | `http://localhost:5173` (comma-separated) |
+| `TRUST_PROXY`    | `false`; `true` behind a reverse proxy, so the activity log records the client's address |
 
 ---
 
@@ -124,6 +125,23 @@ How it is enforced:
   account unless the route names `'admin'` (only group management does).
 - **Emails are unique across every kind of account**, so the one sign-in form
   always finds exactly one. A doctor who works for two groups needs two emails.
+- **Passwords** are at least 8 characters, with letters and numbers
+  (`common/password.ts`). Anyone changes their own with `change-password`; a
+  forgotten one is reset by the group's owner (doctors, receptionists) or the
+  platform (owners) - there is no email reset. Any password change raises the
+  account's `session_version`, which every token carries (`sv`), so all sessions
+  started before it get 401 `code: PASSWORD_CHANGED`; the one that changed its
+  own password gets a fresh token.
+- **Failed sign-ins**: 5 wrong passwords for an email within 15 minutes lock it
+  until the oldest of them is 15 minutes old - 429 `code: TOO_MANY_ATTEMPTS`
+  with `details.minutes`. A successful sign-in clears the count
+  (`login_attempts`, expired by MongoDB).
+- **Activity log** (`activity_log`, kept a year): every successful change (any
+  POST by a signed-in account, via `modules/audit/audit.interceptor.ts`) with
+  who, when, the address, what was sent (never passwords) and, for edits and
+  deletions, the record as it was before (`modules/audit/audit.routes.ts` says
+  what each route means); plus every sign-in and failed attempt. The owner reads
+  its group's, the platform everyone's.
 
 ## Endpoints
 
@@ -136,7 +154,9 @@ Roles: P platform, O owner, R receptionist, D doctor. "scoped" means everyone, e
 | `POST admin-login`, `owner-login`, `doctor-login`, `receptionist-login` | anyone | the same, limited to those roles (`admin-login`: platform and owners) |
 | `GET list-groups`, `GET show-group/:id` | P | groups with their owner, branches and counts |
 | `POST add-group`, `edit-group`, `group-status`, `delete-group` | P | `add-group` creates the owner too; only a suspended group can be deleted |
-| `POST update-owner-password` | P | |
+| `POST update-owner-password` | P | ends the owner's sessions |
+| `POST change-password` | P, O, R, D | `{ current_password, password, password_confirmation }`; returns a fresh `api_token`, other sessions end |
+| `GET activity-log?category&action&actor&start&end&group_id&before` | P, O | newest first, 100 at a time (`next` = the `before` for the next page); `rows` with `target` and `link`, and the `actors` for a filter |
 | `GET list-clinic?group_id=`, `GET show-clinic/:id` | scoped | branches, with staff counts |
 | `POST add-clinic`, `edit-clinic` (`status: active/closed`), `delete-clinic` | O | a branch with visits can't be deleted - close it |
 | `GET clinic/settings?group_id=` / `POST clinic/settings` | P, O / O | the group's `followup` rule |
@@ -283,7 +303,10 @@ name. It signs in as every kind of account and checks that:
   and counted on the patient;
 - the day's cash per branch, method and person; reminders marked as sent;
   doctors' statements adding up, and payouts;
-- closing a branch and moving a receptionist take effect.
+- closing a branch and moving a receptionist take effect;
+- passwords: the rules, changing your own, and resets ending older sessions;
+  locking an email after 5 wrong passwords; the activity log's contents and who
+  can read it.
 
 It deletes what it created, so it can be run again.
 

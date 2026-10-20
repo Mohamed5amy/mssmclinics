@@ -10,8 +10,8 @@ import {
   Max,
   MaxLength,
   Min,
-  MinLength,
 } from 'class-validator';
+import { IsNewPassword } from '../../../common/password';
 
 export class CreateDoctorDto {
   @IsString()
@@ -41,8 +41,7 @@ export class CreateDoctorDto {
   @IsEmail({}, { message: 'Please enter a valid email address' })
   email: string;
 
-  @IsString()
-  @MinLength(6, { message: 'Password must be at least 6 characters' })
+  @IsNewPassword()
   password: string;
 }
 

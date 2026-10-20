@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { MongooseModule } from '@nestjs/mongoose';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { CountersModule } from './counters/counters.module';
 import { LookupsModule } from './database/lookups.module';
 import { SchemasModule } from './database/schemas.module';
+import { AuditInterceptor } from './modules/audit/audit.interceptor';
+import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClinicsModule } from './modules/clinics/clinics.module';
 import { DoctorsModule } from './modules/doctors/doctors.module';
@@ -34,6 +36,7 @@ import { SpecialtiesModule } from './modules/specialties/specialties.module';
     SchemasModule,
     LookupsModule,
     CountersModule,
+    AuditModule,
     AuthModule,
     GroupsModule,
     ClinicsModule,
@@ -53,6 +56,8 @@ import { SpecialtiesModule } from './modules/specialties/specialties.module';
     // Order matters: authenticate first, then check the role.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // Every successful change goes to the activity log
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
 })
 export class AppModule {}

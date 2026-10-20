@@ -12,12 +12,19 @@ import { Staff } from '../modules/staff/staff.schema';
 export const AccessCode = {
   GroupSuspended: 'GROUP_SUSPENDED',
   BranchClosed: 'BRANCH_CLOSED',
+  PasswordChanged: 'PASSWORD_CHANGED',
+  TooManyAttempts: 'TOO_MANY_ATTEMPTS',
 } as const;
 
 /** Where an account sits, read from the database. */
 interface Placement {
   group_id: number | null;
   clinic_ids: number[] | null;
+}
+
+/** ...and which of its sessions are still valid. */
+interface Loaded extends Placement {
+  session_version: number;
 }
 
 /**
@@ -35,28 +42,44 @@ export class AccountsService {
     @InjectModel(Clinic.name) private readonly clinics: Model<Clinic>,
   ) {}
 
-  async load({ id, email, role }: TokenPayload): Promise<AuthUser> {
-    const placement = await this.placement(role, id);
-    if (!placement) {
+  async load({ id, email, role, sv }: TokenPayload): Promise<AuthUser> {
+    const loaded = await this.placement(role, id);
+    if (!loaded) {
       throw new UnauthorizedException('Your session has expired, please sign in again');
     }
+    // A password change ends every session started before it
+    if ((sv ?? 0) !== loaded.session_version) {
+      throw new UnauthorizedException({
+        message: 'Your password was changed - please sign in again',
+        code: AccessCode.PasswordChanged,
+      });
+    }
+    const { session_version: _version, ...placement } = loaded;
     await this.assertMayEnter(role, placement);
     return { id, email, role, ...placement };
   }
 
-  private async placement(role: string, id: number): Promise<Placement | null> {
+  private async placement(role: string, id: number): Promise<Loaded | null> {
     switch (role) {
-      case 'admin':
-        return (await this.admins.exists({ id })) ? { group_id: null, clinic_ids: null } : null;
+      case 'admin': {
+        const admin = await this.admins.findOne({ id }).select('session_version').lean();
+        return admin ? { group_id: null, clinic_ids: null, session_version: admin.session_version ?? 0 } : null;
+      }
       case 'owner':
       case 'receptionist': {
-        const account = await this.staff.findOne({ id, role }).select('group_id clinic_ids').lean();
+        const account = await this.staff.findOne({ id, role }).select('group_id clinic_ids session_version').lean();
         if (!account) return null;
-        return { group_id: account.group_id, clinic_ids: role === 'owner' ? null : account.clinic_ids };
+        return {
+          group_id: account.group_id,
+          clinic_ids: role === 'owner' ? null : account.clinic_ids,
+          session_version: account.session_version ?? 0,
+        };
       }
       case 'doctor': {
-        const doctor = await this.doctors.findOne({ id }).select('group_id clinic_ids').lean();
-        return doctor ? { group_id: doctor.group_id, clinic_ids: doctor.clinic_ids } : null;
+        const doctor = await this.doctors.findOne({ id }).select('group_id clinic_ids session_version').lean();
+        return doctor
+          ? { group_id: doctor.group_id, clinic_ids: doctor.clinic_ids, session_version: doctor.session_version ?? 0 }
+          : null;
       }
       default:
         return null;
@@ -84,6 +107,15 @@ export class AccountsService {
         throw new ForbiddenException({ message: 'This branch is closed', code: AccessCode.BranchClosed });
       }
     }
+  }
+
+  /** An account's name, for the activity log. */
+  async nameOf(role: string, id: number): Promise<string> {
+    const model = (role === 'admin' ? this.admins : role === 'doctor' ? this.doctors : this.staff) as unknown as Model<{
+      id: number;
+      name: string;
+    }>;
+    return (await model.findOne({ id }).select('name').lean())?.name ?? '';
   }
 
   /** Finds whoever owns an email, in any kind of account, with the password hash. */

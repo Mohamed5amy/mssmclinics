@@ -1,4 +1,5 @@
-import { IsEmail, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsNewPassword } from '../../../common/password';
 import { GROUP_STATUSES } from '../group.schema';
 
 /** A new group and the owner account that will run it, created together. */
@@ -20,8 +21,7 @@ export class CreateGroupDto {
   @IsEmail({}, { message: 'Please enter a valid email address' })
   owner_email: string;
 
-  @IsString()
-  @MinLength(6, { message: 'Password must be at least 6 characters' })
+  @IsNewPassword()
   owner_password: string;
 }
 

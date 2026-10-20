@@ -22,6 +22,10 @@ export class Admin {
   @Prop({ required: true, select: false })
   password: string;
 
+  /** Raised whenever the password changes; tokens issued before it stop working. */
+  @Prop({ default: 0 })
+  session_version: number;
+
 }
 
 export const AdminSchema = SchemaFactory.createForClass(Admin);

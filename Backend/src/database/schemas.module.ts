@@ -1,6 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Admin, AdminSchema } from '../modules/admins/admin.schema';
+import { Activity, ActivitySchema } from '../modules/audit/activity.schema';
+import { LoginAttempt, LoginAttemptSchema } from '../modules/auth/login-attempt.schema';
 import { Clinic, ClinicSchema } from '../modules/clinics/clinic.schema';
 import { Doctor, DoctorSchema } from '../modules/doctors/doctor.schema';
 import { DoctorPayout, DoctorPayoutSchema } from '../modules/finance/payout.schema';
@@ -21,6 +23,8 @@ import { Staff, StaffSchema } from '../modules/staff/staff.schema';
 
 const models = MongooseModule.forFeature([
   { name: Admin.name, schema: AdminSchema },
+  { name: Activity.name, schema: ActivitySchema },
+  { name: LoginAttempt.name, schema: LoginAttemptSchema },
   { name: Group.name, schema: GroupSchema },
   { name: Staff.name, schema: StaffSchema },
   { name: Clinic.name, schema: ClinicSchema },

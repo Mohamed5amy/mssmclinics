@@ -1,7 +1,8 @@
 // Smoke test for the MSSM backend: the platform -> group -> branch structure,
 // every role's reach and limits, doctors' hours and booking into them, the
 // queue, payments, the re-visit rule, the medical file, no-shows, the day's
-// cash, doctors' statements and reminders.
+// cash, doctors' statements, reminders, passwords, sign-in limits and the
+// activity log.
 //
 //   npm run seed     (the test expects the seeded demo data)
 //   npm run dev      (in another terminal)
@@ -147,6 +148,7 @@ const writes = [
   ['delete-patient-attachment', { id: 1 }],
   ['doctor-payout', { doctor_id: 1, amount: 1 }],
   ['mark-reminded', { id: someVisit.id }],
+  ['update-doctor-password', { id: 1, password: 'Abcd1234', password_confirmation: 'Abcd1234' }],
 ];
 const writeResults = await Promise.all(writes.map(([path, body]) => post(path, P, body)));
 check(`every write inside a group -> 403 (${writes.length} routes)`, writeResults.every((r) => r.status === 403), writes.filter((_, i) => writeResults[i].status !== 403).map(([p]) => p).join());
@@ -416,6 +418,47 @@ check('a doctor sees only their own statement', (await get(`doctor-statement?doc
 check("the desk can't see statements; only the owner records payouts", (await get(`doctor-statement?doctor_id=${karimId}&`, R)).status === 403 && (await post('doctor-payout', K, { doctor_id: karimId, amount: 1 })).status === 403);
 check("another group's doctor -> 404", (await get(`doctor-statement?doctor_id=${karimId}&`, S)).status === 404);
 check('deleting the payout', (await post('delete-doctor-payout', O, { id: payout.data?.id })).status === 200 && (await get(`doctor-statement?doctor_id=${karimId}&`, O)).data.closing === statement.closing);
+
+section('Passwords and sessions');
+const weak = await post('change-password', D, { current_password: PASSWORD, password: 'abcdefgh', password_confirmation: 'abcdefgh' });
+check('a new password needs 8 characters with letters and numbers', weak.errors?.password !== undefined);
+check('the current password must be right', (await post('change-password', D, { current_password: 'Wrong1234', password: 'Doc@20270', password_confirmation: 'Doc@20270' })).errors?.current_password !== undefined);
+check('...and the new one different', (await post('change-password', D, { current_password: PASSWORD, password: PASSWORD, password_confirmation: PASSWORD })).errors?.password !== undefined);
+const changed = await post('change-password', D, { current_password: PASSWORD, password: 'Doc@20270', password_confirmation: 'Doc@20270' });
+const D2 = changed.data?.api_token;
+const oldSession = await get('list-doctors', D);
+check('changing your password ends your other sessions', changed.status === 200 && oldSession.status === 401 && oldSession.code === 'PASSWORD_CHANGED', JSON.stringify(oldSession));
+check('...and this one carries on with a fresh token', (await get('list-doctors', D2)).status === 200);
+check('the new password signs in', (await post('login', null, { email: 'tmp-doc@mssm.test', password: 'Doc@20270' })).status === 200);
+const deskSession = (await login('tmp-desk@mssm.test', 'Desk@2026')).api_token;
+await post('update-receptionist-password', O, { id: desk.data.id, password: 'Desk@2026', password_confirmation: 'Desk@2026' });
+check("the owner resetting a password ends that account's sessions", (await get('list-patients', deskSession)).code === 'PASSWORD_CHANGED');
+
+section('Sign-in limits');
+const nobody = `nobody-${Date.now()}@mssm.test`;
+for (let i = 0; i < 5; i++) await post('login', null, { email: nobody, password: 'Wrong1234' });
+const locked = await post('login', null, { email: nobody, password: 'Wrong1234' });
+check('5 wrong passwords lock the email for a while', locked.status === 429 && locked.code === 'TOO_MANY_ATTEMPTS' && locked.details?.minutes > 0, JSON.stringify(locked));
+for (let i = 0; i < 4; i++) await post('login', null, { email: 'tmp-desk@mssm.test', password: 'Wrong1234' });
+const deskIn = await post('login', null, { email: 'tmp-desk@mssm.test', password: 'Desk@2026' });
+for (let i = 0; i < 4; i++) await post('login', null, { email: 'tmp-desk@mssm.test', password: 'Wrong1234' });
+check('a successful sign-in clears the count', deskIn.status === 200 && (await post('login', null, { email: 'tmp-desk@mssm.test', password: 'Desk@2026' })).status === 200);
+
+section('Activity log');
+const moneyLog = (await get('activity-log?category=money', O)).data;
+check("the owner reads its own group's log", moneyLog?.rows.length > 0 && moneyLog.rows.every((r) => r.group_id === nour.group_id));
+check('who took a payment, and how much', moneyLog.rows.some((r) => r.route === 'clinic/add-reservation' && r.details.paid === 120 && r.actor_name === 'سلمى عبد الله' && r.actor_role === 'receptionist'));
+const deletions = (await get('activity-log?action=delete', O)).data;
+check('a deleted visit keeps what it was', deletions.rows.some((r) => r.route === 'delete-reservation' && typeof r.before?.price === 'number' && r.target.startsWith('كشف #')));
+const updates = (await get('activity-log?action=update', O)).data;
+check('an edit keeps the value before', updates.rows.some((r) => r.route === 'clinic/edit-reservation' && r.before?.time === '10:00' && r.details.time === '10:40'));
+const access = (await get('activity-log?category=access', O)).data;
+check('sign-ins and password resets are logged', access.rows.some((r) => r.action === 'login' && r.actor_name === 'استقبال تجربة') && access.rows.some((r) => r.route === 'update-receptionist-password'));
+check('passwords never reach the log', [moneyLog, deletions, updates, access].every((page) => page.rows.every((r) => !/password/i.test(Object.keys(r.details ?? {}).join()))));
+check('the people in the log, for the filter', moneyLog.actors.some((a) => a.key.startsWith('receptionist:') && a.name === 'سلمى عبد الله'));
+check("another group doesn't see it", (await get('activity-log', S)).data.rows.every((r) => r.group_id === shefaGroup.id));
+check('the desk and doctors have no log', (await get('activity-log', R)).status === 403 && (await get('activity-log', K)).status === 403);
+check("the platform sees a group's log, and failed sign-ins of unknown emails", (await get(`activity-log?group_id=${nourGroup.id}&`, P)).data.rows.every((r) => r.group_id === nourGroup.id) && (await get('activity-log?action=login_failed', P)).data.rows.some((r) => r.details.email === nobody));
 
 section('Re-visit rule across branches');
 const settings = (await get('clinic/settings', O)).data;

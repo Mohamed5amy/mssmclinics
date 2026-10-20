@@ -1,4 +1,5 @@
-import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsNewPassword } from '../../../common/password';
 
 export class CreateReceptionistDto {
   @IsString()
@@ -13,8 +14,7 @@ export class CreateReceptionistDto {
   @IsEmail({}, { message: 'Please enter a valid email address' })
   email: string;
 
-  @IsString()
-  @MinLength(6, { message: 'Password must be at least 6 characters' })
+  @IsNewPassword()
   password: string;
 
   /** The branch whose front desk this account runs. */

@@ -15,6 +15,8 @@ export interface TokenPayload {
   id: number;
   email: string;
   role: Role;
+  /** The account's session version when the token was issued (missing on older tokens = 0). */
+  sv?: number;
 }
 
 /**

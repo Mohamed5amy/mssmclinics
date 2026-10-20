@@ -10,6 +10,8 @@ import { hashPassword } from '../modules/auth/auth.service';
 import { Clinic } from '../modules/clinics/clinic.schema';
 import { Doctor } from '../modules/doctors/doctor.schema';
 import { FollowupRule, Group, GroupStatus } from '../modules/groups/group.schema';
+import { Activity } from '../modules/audit/activity.schema';
+import { LoginAttempt } from '../modules/auth/login-attempt.schema';
 import { DoctorPayout } from '../modules/finance/payout.schema';
 import { PatientAttachment } from '../modules/medical/attachment.schema';
 import { Patient } from '../modules/patients/patient.schema';
@@ -421,12 +423,14 @@ async function seed() {
   const exceptions = model<ScheduleException>(ScheduleException.name);
   const attachments = model<PatientAttachment>(PatientAttachment.name);
   const payouts = model<DoctorPayout>(DoctorPayout.name);
+  const activity = model<Activity>(Activity.name);
+  const attempts = model<LoginAttempt>(LoginAttempt.name);
 
   const database = admins.db.name;
   logger.log(`Clearing database "${database}"...`);
   const collections: Model<any>[] = [
     admins, groups, staff, clinics, doctors, patients, providers, reservations, services, specialties, counters,
-    schedules, exceptions, attachments, payouts,
+    schedules, exceptions, attachments, payouts, activity, attempts,
   ];
   // A clean slate: dropping the database also clears collections and indexes
   // left over from older shapes of the data; the indexes are then rebuilt from
